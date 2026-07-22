@@ -3,6 +3,7 @@
 
 import argparse
 import hashlib
+import os
 from pathlib import Path
 import re
 import shutil
@@ -36,10 +37,25 @@ def parse_ldd_references(output: str) -> Iterable[str]:
             yield reference
 
 
+def msys_virtual_path(reference: str, executable: Path, msystem: str) -> Optional[Path]:
+    if not reference.startswith("/") or not msystem:
+        return None
+    for parent in executable.resolve().parents:
+        if parent.name.lower() == msystem.lower():
+            return parent.parent.joinpath(*reference.lstrip("/").split("/"))
+    return None
+
+
 def resolve_dependency(reference: str) -> Optional[Path]:
     candidate = Path(reference)
     if candidate.is_file():
         return candidate
+    if os.name == "nt" and reference.startswith("/"):
+        candidate = msys_virtual_path(
+            reference, Path(sys.executable), os.environ.get("MSYSTEM", "")
+        )
+        if candidate is not None and candidate.is_file():
+            return candidate
     filename = reference.replace("\\", "/").rsplit("/", 1)[-1]
     located = shutil.which(filename)
     if located is not None and Path(located).is_file():

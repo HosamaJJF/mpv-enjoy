@@ -14,7 +14,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 
 from fetch_dependencies import DependencyError, load_lock, safe_extract_tar  # noqa: E402
 from generate_sbom import build_sbom  # noqa: E402
-from collect_windows_runtime import parse_ldd_references  # noqa: E402
+from collect_windows_runtime import msys_virtual_path, parse_ldd_references  # noqa: E402
 
 
 class DependencyLockTests(unittest.TestCase):
@@ -86,6 +86,18 @@ class WindowsRuntimeTests(unittest.TestCase):
                 "D:\\a\\_temp\\msys64\\clang64\\bin\\avcodec-62.dll",
             ],
         )
+
+    def test_maps_msys_virtual_path_from_python_location(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "msys64"
+            executable = root / "clang64" / "bin" / "python3.exe"
+            expected = root / "clang64" / "bin" / "libass-9.dll"
+            expected.parent.mkdir(parents=True)
+            expected.touch()
+            self.assertEqual(
+                msys_virtual_path("/clang64/bin/libass-9.dll", executable, "CLANG64"),
+                expected.resolve(),
+            )
 
 
 class ConfigurationTests(unittest.TestCase):
