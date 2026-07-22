@@ -57,8 +57,8 @@ def build_sbom(lock: Dict[str, object], platform: str) -> Dict[str, object]:
             "versionInfo": project_version,
             "downloadLocation": "NOASSERTION",
             "filesAnalyzed": False,
-            "licenseConcluded": "MIT",
-            "licenseDeclared": "MIT",
+            "licenseConcluded": "NONE",
+            "licenseDeclared": "NONE",
             "copyrightText": "Copyright (c) 2026 mpv-enjoy contributors",
         }
     ]

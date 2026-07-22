@@ -56,6 +56,15 @@ class DependencyLockTests(unittest.TestCase):
         self.assertIn("uosc", names)
         self.assertIn("uosc_danmaku", names)
         self.assertIn("yt-dlp-binary-macos-x64", names)
+        project = next(package for package in sbom["packages"] if package["name"] == "mpv-enjoy")
+        self.assertEqual(project["licenseDeclared"], "NONE")
+        self.assertEqual(project["licenseConcluded"], "NONE")
+
+    def test_project_license_uses_component_specific_terms(self):
+        notice = (PROJECT_ROOT / "LICENSE.MD").read_text(encoding="utf-8")
+        self.assertIn("UNLICENSED", notice)
+        for component in ("mpv", "uosc", "uosc_danmaku", "thumbfast", "yt-dlp"):
+            self.assertIn(component, notice)
 
 
 class ArchiveSafetyTests(unittest.TestCase):

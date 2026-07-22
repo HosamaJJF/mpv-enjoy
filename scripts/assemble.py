@@ -174,7 +174,7 @@ def copy_licenses_and_sources(
     sources = release_root / "sources"
     licenses.mkdir(parents=True, exist_ok=True)
     sources.mkdir(parents=True, exist_ok=True)
-    copy_file(PROJECT_ROOT / "LICENSE", licenses / "mpv-enjoy-MIT.txt")
+    copy_file(PROJECT_ROOT / "LICENSE.MD", licenses / "mpv-enjoy-UNLICENSED.md")
     copy_file(PROJECT_ROOT / "THIRD_PARTY_NOTICES.md", release_root / "THIRD_PARTY_NOTICES.md")
 
     candidates = {
