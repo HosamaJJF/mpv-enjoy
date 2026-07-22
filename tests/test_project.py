@@ -1,5 +1,6 @@
 import io
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -130,9 +131,13 @@ class ScriptSyntaxTests(unittest.TestCase):
             compile(source, str(script), "exec")
 
     def test_shell_scripts_parse(self):
+        # Native Windows Python resolves bash.exe to the WSL launcher even when
+        # the parent workflow shell is MSYS2. Its sh.exe is the usable MSYS2
+        # parser in that environment.
+        bash_parser = "sh" if os.name == "nt" and os.environ.get("MSYSTEM") else "bash"
         scripts = [
-            ("bash", "scripts/build-windows-msys2.sh"),
-            ("bash", "scripts/build-macos-arm64.sh"),
+            (bash_parser, "scripts/build-windows-msys2.sh"),
+            (bash_parser, "scripts/build-macos-arm64.sh"),
             ("sh", "scripts/macos-launcher.sh"),
         ]
         for shell, script in scripts:
