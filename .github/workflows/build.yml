@@ -46,21 +46,30 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: .cache/downloads
-          key: mpv-lazy-enjoy-downloads-windows-x64-${{ hashFiles('dependencies.lock.json') }}
+          key: mpv-enjoy-downloads-windows-x64-${{ hashFiles('dependencies.lock.json') }}
       - name: Unit tests
         run: python3 -m unittest discover -s tests -v
       - name: Build and package
         run: bash scripts/build-windows-msys2.sh
       - uses: actions/upload-artifact@v7
         with:
-          name: mpv-lazy-enjoy-windows-x64
+          name: mpv-enjoy-windows-x64
           path: |
-            dist/mpv-lazy-enjoy-0.1.0-dev-windows-x64.zip
+            dist/mpv-enjoy-0.1.0-dev-windows-x64.zip
             dist/SHA256SUMS
           if-no-files-found: error
 
-  macos-arm64:
-    runs-on: macos-15
+  macos:
+    name: ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-arm64
+            runner: macos-15
+          - platform: macos-x64
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v7
@@ -70,7 +79,7 @@ jobs:
       - uses: actions/cache@v6
         with:
           path: .cache/downloads
-          key: mpv-lazy-enjoy-downloads-macos-arm64-${{ hashFiles('dependencies.lock.json') }}
+          key: mpv-enjoy-downloads-${{ matrix.platform }}-${{ hashFiles('dependencies.lock.json') }}
       - name: Install native build dependencies
         env:
           HOMEBREW_NO_AUTO_UPDATE: '1'
@@ -82,12 +91,12 @@ jobs:
       - name: Unit tests
         run: python3 -m unittest discover -s tests -v
       - name: Build, ad-hoc sign and package
-        run: bash scripts/build-macos-arm64.sh
+        run: bash scripts/build-macos.sh ${{ matrix.platform }}
       - uses: actions/upload-artifact@v7
         with:
-          name: mpv-lazy-enjoy-macos-arm64
+          name: mpv-enjoy-${{ matrix.platform }}
           path: |
-            dist/mpv-lazy-enjoy-0.1.0-dev-macos-arm64.zip
-            dist/mpv-lazy-enjoy-0.1.0-dev-macos-arm64.dmg
+            dist/mpv-enjoy-0.1.0-dev-${{ matrix.platform }}.zip
+            dist/mpv-enjoy-0.1.0-dev-${{ matrix.platform }}.dmg
             dist/SHA256SUMS
           if-no-files-found: error

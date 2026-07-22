@@ -33,7 +33,10 @@ class DependencyLockTests(unittest.TestCase):
             self.assertNotIn("/main/", spec["url"])
 
     def test_target_architectures_are_exact(self):
-        self.assertEqual(set(self.lock["platform_assets"]), {"windows-x64", "macos-arm64"})
+        self.assertEqual(
+            set(self.lock["platform_assets"]),
+            {"windows-x64", "macos-arm64", "macos-x64"},
+        )
 
     def test_expected_component_versions(self):
         components = self.lock["components"]
@@ -46,13 +49,13 @@ class DependencyLockTests(unittest.TestCase):
         )
 
     def test_sbom_has_dependency_relationships(self):
-        sbom = build_sbom(self.lock, "macos-arm64")
+        sbom = build_sbom(self.lock, "macos-x64")
         self.assertEqual(sbom["spdxVersion"], "SPDX-2.3")
         names = {package["name"] for package in sbom["packages"]}
-        self.assertIn("mpv-lazy-enjoy", names)
+        self.assertIn("mpv-enjoy", names)
         self.assertIn("uosc", names)
         self.assertIn("uosc_danmaku", names)
-        self.assertIn("yt-dlp-binary-macos-arm64", names)
+        self.assertIn("yt-dlp-binary-macos-x64", names)
 
 
 class ArchiveSafetyTests(unittest.TestCase):
@@ -120,6 +123,16 @@ class ConfigurationTests(unittest.TestCase):
         self.assertIn("show_danmaku@uosc_danmaku", controls)
         self.assertIn("button:danmaku_menu", controls)
 
+    def test_macos_architectures_have_matching_platform_config(self):
+        overrides = json.loads(
+            (PROJECT_ROOT / "config" / "uosc-overrides.json").read_text(encoding="utf-8")
+        )
+        for platform in ("macos-arm64", "macos-x64"):
+            self.assertIn(platform, overrides)
+            self.assertTrue(
+                (PROJECT_ROOT / "config" / "platform" / (platform + ".conf")).is_file()
+            )
+
     def test_danmaku_defaults_are_manual(self):
         config = (
             PROJECT_ROOT / "config" / "common" / "script-opts" / "uosc_danmaku.conf"
@@ -128,15 +141,15 @@ class ConfigurationTests(unittest.TestCase):
         self.assertIn("autoload_for_url=no", config)
         self.assertIn("history_path=~~/danmaku-history.json", config)
 
-    def test_macos_launcher_is_isolated_and_does_not_disable_gatekeeper(self):
+    def test_macos_launcher_uses_app_support_and_does_not_disable_gatekeeper(self):
         launcher = (PROJECT_ROOT / "scripts" / "macos-launcher.sh").read_text(
             encoding="utf-8"
         )
         native_launcher = (PROJECT_ROOT / "scripts" / "macos-launcher.c").read_text(
             encoding="utf-8"
         )
-        self.assertIn("Library/Application Support/mpv-lazy-enjoy", launcher)
-        self.assertIn('--config-dir="$MPV_LAZY_ENJOY_CONFIG_DIR"', launcher)
+        self.assertIn("Library/Application Support/mpv-enjoy", launcher)
+        self.assertIn('--config-dir="$MPV_ENJOY_CONFIG_DIR"', launcher)
         self.assertIn("_NSGetExecutablePath", native_launcher)
         self.assertIn('child_argv[0] = "/bin/sh"', native_launcher)
         self.assertNotIn("spctl --master-disable", launcher)
@@ -148,11 +161,18 @@ class ConfigurationTests(unittest.TestCase):
             / "config"
             / "common"
             / "scripts"
-            / "mpv_lazy_enjoy_danmaku_bridge.lua"
+            / "mpv_enjoy_danmaku_bridge.lua"
         ).read_text(encoding="utf-8")
         self.assertIn("set-button", bridge)
         self.assertIn("uosc-version", bridge)
         self.assertIn("mp.add_timeout", bridge)
+
+    def test_macos_build_has_separate_native_architectures(self):
+        script = (PROJECT_ROOT / "scripts" / "build-macos.sh").read_text(encoding="utf-8")
+        self.assertIn("macos-arm64", script)
+        self.assertIn("macos-x64", script)
+        self.assertIn("MPV_ENJOY_MACHO_ARCH=x86_64", script)
+        self.assertIn('[[ "$MPV_ENJOY_DESCRIPTION" == *"universal binary"* ]]', script)
 
 
 class ScriptSyntaxTests(unittest.TestCase):
@@ -168,7 +188,7 @@ class ScriptSyntaxTests(unittest.TestCase):
         bash_parser = "sh" if os.name == "nt" and os.environ.get("MSYSTEM") else "bash"
         scripts = [
             (bash_parser, "scripts/build-windows-msys2.sh"),
-            (bash_parser, "scripts/build-macos-arm64.sh"),
+            (bash_parser, "scripts/build-macos.sh"),
             ("sh", "scripts/macos-launcher.sh"),
         ]
         for shell, script in scripts:

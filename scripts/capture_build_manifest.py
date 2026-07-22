@@ -23,7 +23,9 @@ def capture(command: Sequence[str]) -> str:
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--platform", required=True, choices=["windows-x64", "macos-arm64"])
+    parser.add_argument(
+        "--platform", required=True, choices=["windows-x64", "macos-arm64", "macos-x64"]
+    )
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args(argv)
     commands: List[Tuple[str, Sequence[str]]] = [
@@ -39,7 +41,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         commands.append(("Homebrew packages", ["brew", "list", "--versions"]))
         commands.append(("Xcode", ["xcodebuild", "-version"]))
     lines = [
-        "mpv-lazy-enjoy native build dependency manifest",
+        "mpv-enjoy native build dependency manifest",
         "platform={}".format(args.platform),
         "host={}".format(platform.platform()),
         "machine={}".format(platform.machine()),

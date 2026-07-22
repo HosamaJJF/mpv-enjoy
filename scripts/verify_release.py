@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify structure, architecture and privacy properties of an assembled release."""
+"""Verify the structure, architecture and required config of an assembled release."""
 
 import argparse
 import json
@@ -16,6 +16,10 @@ from typing import Dict, List, Optional
 
 class VerificationError(RuntimeError):
     pass
+
+
+SUPPORTED_PLATFORMS = ("windows-x64", "macos-arm64", "macos-x64")
+MACOS_ARCHES = {"macos-arm64": "arm64", "macos-x64": "x86_64"}
 
 
 BANNED_CONFIG_PATTERNS = {
@@ -54,7 +58,7 @@ def verify_config(config: Path, platform: str) -> Dict[str, str]:
         config / "scripts" / "uosc" / "main.lua",
         config / "scripts" / "uosc_danmaku" / "main.lua",
         config / "scripts" / "thumbfast.lua",
-        config / "scripts" / "mpv_lazy_enjoy_danmaku_bridge.lua",
+        config / "scripts" / "mpv_enjoy_danmaku_bridge.lua",
     ]
     for path in required:
         require(path.is_file(), "Missing config component: {}".format(path))
@@ -88,17 +92,19 @@ def verify_config(config: Path, platform: str) -> Dict[str, str]:
         expected = "x86-64"
     else:
         ziggy = config / "scripts" / "uosc" / "bin" / "ziggy-darwin"
-        expected = "arm64"
+        expected = MACOS_ARCHES[platform]
     require(ziggy.is_file(), "Missing platform ziggy binary")
     description = file_description(ziggy)
     if "unavailable" not in description:
         require(expected in description, "Wrong ziggy architecture: {}".format(description))
+        if platform != "windows-x64":
+            require("universal binary" not in description, "ziggy must not be Universal")
     return {"ziggy": description}
 
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--platform", required=True, choices=["windows-x64", "macos-arm64"])
+    parser.add_argument("--platform", required=True, choices=SUPPORTED_PLATFORMS)
     parser.add_argument("--release", required=True, type=Path)
     args = parser.parse_args(argv)
     try:
@@ -119,8 +125,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                 require("x86-64" in description or "PE32+" in description, "Wrong mpv architecture")
             report["mpv"] = description
         else:
-            app = args.release / "mpv-lazy-enjoy.app"
-            require(app.is_dir(), "Missing mpv-lazy-enjoy.app")
+            app = args.release / "mpv-enjoy.app"
+            require(app.is_dir(), "Missing mpv-enjoy.app")
             launcher = app / "Contents" / "MacOS" / "mpv"
             helper = app / "Contents" / "Resources" / "macos-launcher.sh"
             require(launcher.is_file(), "Missing native macOS launcher")
@@ -130,27 +136,42 @@ def main(argv: Optional[List[str]] = None) -> int:
             config = app / "Contents" / "Resources" / "config-template"
             description = file_description(app / "Contents" / "MacOS" / "mpv-bin")
             launcher_description = file_description(launcher)
+            yt_dlp_description = file_description(app / "Contents" / "MacOS" / "yt-dlp")
+            architecture = MACOS_ARCHES[args.platform]
             if "unavailable" not in description:
-                require("arm64" in description, "Wrong mpv architecture: {}".format(description))
-                require("x86_64" not in description, "mpv-bin must be native arm64, not Universal")
+                require(
+                    architecture in description,
+                    "Wrong mpv architecture: {}".format(description),
+                )
+                require("universal binary" not in description, "mpv-bin must not be Universal")
             if "unavailable" not in launcher_description:
                 require(
-                    "Mach-O" in launcher_description and "arm64" in launcher_description,
-                    "macOS launcher must be a native arm64 Mach-O executable: {}".format(
-                        launcher_description
+                    "Mach-O" in launcher_description and architecture in launcher_description,
+                    "macOS launcher must be a native {} Mach-O executable: {}".format(
+                        architecture,
+                        launcher_description,
                     ),
                 )
                 require(
-                    "x86_64" not in launcher_description,
+                    "universal binary" not in launcher_description,
                     "macOS launcher must not be Universal",
+                )
+            if "unavailable" not in yt_dlp_description:
+                require(
+                    architecture in yt_dlp_description,
+                    "Wrong yt-dlp architecture: {}".format(yt_dlp_description),
+                )
+                require(
+                    "universal binary" not in yt_dlp_description,
+                    "yt-dlp must not be Universal",
                 )
             with (app / "Contents" / "Info.plist").open("rb") as handle:
                 plist = plistlib.load(handle)
             require(plist.get("CFBundleExecutable") == "mpv", "Unexpected CFBundleExecutable")
             if sys.platform == "darwin":
-                with tempfile.TemporaryDirectory(prefix="mpv-lazy-enjoy-smoke-") as temporary:
+                with tempfile.TemporaryDirectory(prefix="mpv-enjoy-smoke-") as temporary:
                     environment = os.environ.copy()
-                    environment["MPV_LAZY_ENJOY_HOME"] = temporary
+                    environment["MPV_ENJOY_HOME"] = temporary
                     smoke = subprocess.run(
                         [str(launcher), "--version"],
                         text=True,
@@ -166,6 +187,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                 )
             report["mpv"] = description
             report["launcher"] = launcher_description
+            report["yt_dlp"] = yt_dlp_description
         report.update(verify_config(config, args.platform))
     except (VerificationError, OSError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
         print("error: {}".format(error), file=sys.stderr)

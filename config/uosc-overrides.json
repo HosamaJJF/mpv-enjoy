@@ -10,5 +10,8 @@
   },
   "macos-arm64": {
     "default_directory": "~/"
+  },
+  "macos-x64": {
+    "default_directory": "~/"
   }
 }

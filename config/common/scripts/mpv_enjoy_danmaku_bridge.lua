@@ -23,7 +23,7 @@ local function register_integration()
             utils.format_json(definition)
         )
     end
-    -- uosc sends this once at startup. Repeating it avoids a script-load race.
+    -- uosc sends this once at startup; repeating it avoids a script-load race.
     mp.commandv('script-message', 'uosc-version', '5.12.0')
 end
 
