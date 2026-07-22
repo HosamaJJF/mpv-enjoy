@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Assemble mpv-lazy-enjoy around a platform-native mpv build."""
+"""Assemble mpv-enjoy around a platform-native mpv build."""
 
 import argparse
 import json
@@ -28,6 +28,11 @@ from generate_sbom import build_sbom
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 REQUIRED_COMPONENTS = ("mpv", "uosc", "uosc_danmaku", "thumbfast", "yt_dlp_source")
+SUPPORTED_PLATFORMS = ("windows-x64", "macos-arm64", "macos-x64")
+MACOS_ARCHES = {
+    "macos-arm64": {"macho": "arm64", "go": "arm64"},
+    "macos-x64": {"macho": "x86_64", "go": "amd64"},
+}
 
 
 class AssemblyError(RuntimeError):
@@ -85,7 +90,7 @@ def configure_uosc(uosc_source: Path, config_dir: Path, platform: str) -> None:
     )
     managed_binding = (
         "bind_command('update', function()\n"
-        "\tmp.osd_message('uosc is managed by mpv-lazy-enjoy; update the whole package instead.')\n"
+        "\tmp.osd_message('uosc is managed by mpv-enjoy; update the whole package instead.')\n"
         "end)"
     )
     if update_menu not in main or update_binding not in main:
@@ -110,7 +115,7 @@ def build_uosc_ziggy(uosc_source: Path, config_dir: Path, platform: str) -> None
     if platform == "windows-x64":
         goos, goarch, filename = "windows", "amd64", "ziggy-windows.exe"
     else:
-        goos, goarch, filename = "darwin", "arm64", "ziggy-darwin"
+        goos, goarch, filename = "darwin", MACOS_ARCHES[platform]["go"], "ziggy-darwin"
     output = config_dir / "scripts" / "uosc" / "bin" / filename
     output.parent.mkdir(parents=True, exist_ok=True)
     environment = os.environ.copy()
@@ -147,7 +152,7 @@ def configure_danmaku(source: Path, config_dir: Path) -> None:
     update_line = 'mp.register_script_message("check-update", check_for_update)'
     replacement = (
         'mp.register_script_message("check-update", function()\n'
-        '    show_message("uosc_danmaku 由 mpv-lazy-enjoy 管理，请更新整个整合包", 3)\n'
+        '    show_message("uosc_danmaku 由 mpv-enjoy 管理，请更新整个整合包", 3)\n'
         "end)"
     )
     if require_line not in main or update_line not in main:
@@ -169,7 +174,7 @@ def copy_licenses_and_sources(
     sources = release_root / "sources"
     licenses.mkdir(parents=True, exist_ok=True)
     sources.mkdir(parents=True, exist_ok=True)
-    copy_file(PROJECT_ROOT / "LICENSE", licenses / "mpv-lazy-enjoy-MIT.txt")
+    copy_file(PROJECT_ROOT / "LICENSE", licenses / "mpv-enjoy-MIT.txt")
     copy_file(PROJECT_ROOT / "THIRD_PARTY_NOTICES.md", release_root / "THIRD_PARTY_NOTICES.md")
 
     candidates = {
@@ -215,21 +220,20 @@ def write_metadata(
 def write_release_readme(release_root: Path, platform: str) -> None:
     if platform == "windows-x64":
         instructions = (
-            "解压后直接运行 `mpv.exe`。配置位于 `portable_config`，个人修改可写入 "
+            "解压后直接运行 `mpv.exe`。配置位于 `portable_config`，自定义选项可写入 "
             "`portable_config/user.conf`。"
         )
     else:
         instructions = (
-            "将 `mpv-lazy-enjoy.app` 拖入“应用程序”。首次运行若被 Gatekeeper 拦截，请在 Finder "
+            "将 `mpv-enjoy.app` 拖入“应用程序”。首次运行若被 Gatekeeper 拦截，请在 Finder "
             "中右键选择“打开”，或前往“系统设置 → 隐私与安全性 → 仍要打开”。不要全局关闭 "
-            "Gatekeeper。配置位于 `~/Library/Application Support/mpv-lazy-enjoy/config`。"
+            "Gatekeeper。配置位于 `~/Library/Application Support/mpv-enjoy/config`。"
         )
-    text = """# mpv-lazy-enjoy {platform}
+    text = """# mpv-enjoy {platform}
 
 {instructions}
 
 弹幕默认采用手动搜索：`Ctrl+d` 打开搜索，`j` 开关弹幕；uosc 控制栏也提供搜索、开关和设置按钮。
-包内不含用户历史、缓存、私有路径、VapourSynth、外置着色器或厂商专用 GPU 组件。
 
 依赖版本见 `dependencies.lock.json`，许可证见 `THIRD_PARTY_NOTICES.md` 和 `LICENSES`，
 对应上游源码归档位于 `sources`。
@@ -254,9 +258,9 @@ def update_info_plist(app: Path, project_version: str) -> None:
     plist_path = app / "Contents" / "Info.plist"
     with plist_path.open("rb") as handle:
         plist = plistlib.load(handle)
-    plist["CFBundleIdentifier"] = "org.mpv-lazy-enjoy.player"
-    plist["CFBundleName"] = "mpv-lazy-enjoy"
-    plist["CFBundleDisplayName"] = "mpv-lazy-enjoy"
+    plist["CFBundleIdentifier"] = "io.github.hosamajjf.mpv-enjoy"
+    plist["CFBundleName"] = "mpv-enjoy"
+    plist["CFBundleDisplayName"] = "mpv-enjoy"
     plist["CFBundleShortVersionString"] = project_version.split("-")[0]
     plist["CFBundleVersion"] = "1"
     plist["LSMinimumSystemVersion"] = "14.0"
@@ -264,7 +268,7 @@ def update_info_plist(app: Path, project_version: str) -> None:
         plistlib.dump(plist, handle, sort_keys=True)
 
 
-def compile_macos_launcher(destination: Path) -> None:
+def compile_macos_launcher(destination: Path, architecture: str) -> None:
     clang = shutil.which("clang")
     if clang is None:
         raise AssemblyError("clang is required to build the macOS launcher")
@@ -278,7 +282,7 @@ def compile_macos_launcher(destination: Path) -> None:
             "-Werror",
             "-Os",
             "-arch",
-            "arm64",
+            architecture,
             "-mmacosx-version-min=14.0",
             str(PROJECT_ROOT / "scripts" / "macos-launcher.c"),
             "-o",
@@ -289,16 +293,41 @@ def compile_macos_launcher(destination: Path) -> None:
     destination.chmod(destination.stat().st_mode | 0o755)
 
 
+def copy_macos_binary_for_arch(source: Path, destination: Path, architecture: str) -> None:
+    lipo = shutil.which("lipo")
+    if lipo is None:
+        raise AssemblyError("lipo is required to assemble a macOS release")
+    result = subprocess.run(
+        [lipo, "-archs", str(source)], text=True, capture_output=True, check=True
+    )
+    architectures = result.stdout.split()
+    if architecture not in architectures:
+        raise AssemblyError(
+            "{} does not contain required architecture {}".format(source, architecture)
+        )
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if len(architectures) == 1:
+        copy_file(source, destination, executable=True)
+    else:
+        subprocess.run(
+            [lipo, str(source), "-thin", architecture, "-output", str(destination)],
+            check=True,
+        )
+        destination.chmod(destination.stat().st_mode | 0o755)
+
+
 def assemble_macos(
     mpv_path: Path,
     release_root: Path,
     config_dir: Path,
     yt_dlp: Path,
     project_version: str,
+    platform: str,
 ) -> None:
     if not mpv_path.is_dir() or mpv_path.suffix != ".app":
         raise AssemblyError("macOS --mpv must point to an mpv.app bundle")
-    app = release_root / "mpv-lazy-enjoy.app"
+    architecture = MACOS_ARCHES[platform]["macho"]
+    app = release_root / "mpv-enjoy.app"
     shutil.copytree(str(mpv_path), str(app), symlinks=True)
     for placeholder in app.rglob(".gitkeep"):
         placeholder.unlink()
@@ -308,9 +337,9 @@ def assemble_macos(
     if not binary.is_file():
         raise AssemblyError("mpv.app is missing Contents/MacOS/mpv")
     binary.rename(macos_dir / "mpv-bin")
-    compile_macos_launcher(binary)
+    compile_macos_launcher(binary, architecture)
     copy_file(PROJECT_ROOT / "scripts" / "macos-launcher.sh", resources / "macos-launcher.sh")
-    copy_file(yt_dlp, macos_dir / "yt-dlp", executable=True)
+    copy_macos_binary_for_arch(yt_dlp, macos_dir / "yt-dlp", architecture)
     shutil.copytree(str(config_dir), str(resources / "config-template"))
     update_info_plist(app, project_version)
 
@@ -326,7 +355,7 @@ def _assert_output_target(output: Path) -> None:
 
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--platform", required=True, choices=["windows-x64", "macos-arm64"])
+    parser.add_argument("--platform", required=True, choices=SUPPORTED_PLATFORMS)
     parser.add_argument("--mpv", required=True, type=Path, help="mpv runtime directory or .app")
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--cache", type=Path, default=DEFAULT_CACHE)
@@ -349,7 +378,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         components = component_specs(lock)
         archives: Dict[str, Path] = {}
         extracted: Dict[str, Path] = {}
-        with tempfile.TemporaryDirectory(prefix="mpv-lazy-enjoy-sources-") as temporary:
+        with tempfile.TemporaryDirectory(prefix="mpv-enjoy-sources-") as temporary:
             extract_root = Path(temporary)
             for name in REQUIRED_COMPONENTS:
                 archives[name] = download_artifact(name, components[name], args.cache)
@@ -380,6 +409,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                         config_dir,
                         yt_dlp,
                         str(lock["project_version"]),
+                        args.platform,
                     )
                 copy_licenses_and_sources(release_root, extracted, archives)
                 write_release_readme(release_root, args.platform)

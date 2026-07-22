@@ -17,6 +17,7 @@ from urllib.request import Request, urlopen
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_LOCK = PROJECT_ROOT / "dependencies.lock.json"
 DEFAULT_CACHE = PROJECT_ROOT / ".cache" / "downloads"
+SUPPORTED_PLATFORMS = ("windows-x64", "macos-arm64", "macos-x64")
 
 
 class DependencyError(RuntimeError):
@@ -54,7 +55,7 @@ def download_artifact(name: str, spec: Dict[str, str], cache_dir: Path) -> Path:
 
     request = Request(
         spec["url"],
-        headers={"User-Agent": "mpv-lazy-enjoy-dependency-fetcher/0.1"},
+        headers={"User-Agent": "mpv-enjoy-dependency-fetcher/0.1"},
     )
     temporary: Optional[Path] = None
     try:
@@ -122,7 +123,7 @@ def extract_component(
         shutil.rmtree(str(destination))
     destination.parent.mkdir(parents=True, exist_ok=True)
 
-    with tempfile.TemporaryDirectory(prefix="mpv-lazy-enjoy-extract-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="mpv-enjoy-extract-") as temporary:
         temporary_root = Path(temporary)
         safe_extract_tar(archive, temporary_root)
         entries = list(temporary_root.iterdir())
@@ -156,7 +157,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--lock", type=Path, default=DEFAULT_LOCK)
     parser.add_argument("--cache", type=Path, default=DEFAULT_CACHE)
     parser.add_argument("--component", action="append", default=[])
-    parser.add_argument("--platform", choices=["windows-x64", "macos-arm64"])
+    parser.add_argument("--platform", choices=SUPPORTED_PLATFORMS)
     parser.add_argument("--all", action="store_true", help="Fetch every source component")
     parser.add_argument("--extract", action="append", default=[], type=parse_extract)
     parser.add_argument("--force-extract", action="store_true")

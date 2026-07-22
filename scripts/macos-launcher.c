@@ -8,7 +8,7 @@
 
 static int launcher_error(const char *message)
 {
-    fprintf(stderr, "mpv-lazy-enjoy launcher: %s\n", message);
+    fprintf(stderr, "mpv-enjoy launcher: %s\n", message);
     return 1;
 }
 
@@ -55,7 +55,7 @@ int main(int argc, char **argv)
 
     execv(child_argv[0], child_argv);
     int saved_errno = errno;
-    fprintf(stderr, "mpv-lazy-enjoy launcher: could not start helper: %s\n",
+    fprintf(stderr, "mpv-enjoy launcher: could not start helper: %s\n",
             strerror(saved_errno));
     free(child_argv);
     free(helper_path);

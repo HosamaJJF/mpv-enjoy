@@ -71,6 +71,15 @@
         "sha256": "b82c3626952e6c14eaf654cc565866775ffd0b9ffb7021628ac59b42c2f4f244",
         "license": "Unlicense AND LicenseRef-yt-dlp-bundled"
       }
+    },
+    "macos-x64": {
+      "yt_dlp": {
+        "version": "2026.06.09",
+        "url": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.06.09/yt-dlp_macos",
+        "filename": "yt-dlp_macos",
+        "sha256": "b82c3626952e6c14eaf654cc565866775ffd0b9ffb7021628ac59b42c2f4f244",
+        "license": "Unlicense AND LicenseRef-yt-dlp-bundled"
+      }
     }
   }
 }

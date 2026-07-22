@@ -49,17 +49,17 @@ def package_from_spec(name: str, spec: Dict[str, str]) -> Dict[str, object]:
 
 def build_sbom(lock: Dict[str, object], platform: str) -> Dict[str, object]:
     project_version = str(lock["project_version"])
-    project_id = "SPDXRef-mpv-lazy-enjoy"
+    project_id = "SPDXRef-mpv-enjoy"
     packages: List[Dict[str, object]] = [
         {
-            "name": "mpv-lazy-enjoy",
+            "name": "mpv-enjoy",
             "SPDXID": project_id,
             "versionInfo": project_version,
             "downloadLocation": "NOASSERTION",
             "filesAnalyzed": False,
             "licenseConcluded": "MIT",
             "licenseDeclared": "MIT",
-            "copyrightText": "Copyright (c) 2026 mpv-lazy-enjoy contributors",
+            "copyrightText": "Copyright (c) 2026 mpv-enjoy contributors",
         }
     ]
     relationships: List[Dict[str, str]] = [
@@ -105,11 +105,11 @@ def build_sbom(lock: Dict[str, object], platform: str) -> Dict[str, object]:
         "spdxVersion": "SPDX-2.3",
         "dataLicense": "CC0-1.0",
         "SPDXID": "SPDXRef-DOCUMENT",
-        "name": "mpv-lazy-enjoy-{}-{}".format(project_version, platform),
+        "name": "mpv-enjoy-{}-{}".format(project_version, platform),
         "documentNamespace": "urn:uuid:" + str(uuid.uuid5(uuid.NAMESPACE_URL, identity)),
         "creationInfo": {
             "created": str(lock.get("generated_at", datetime.now(timezone.utc).isoformat())),
-            "creators": ["Tool: mpv-lazy-enjoy/scripts/generate_sbom.py"],
+            "creators": ["Tool: mpv-enjoy/scripts/generate_sbom.py"],
         },
         "packages": packages,
         "relationships": relationships,
@@ -127,7 +127,9 @@ def build_sbom(lock: Dict[str, object], platform: str) -> Dict[str, object]:
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--lock", type=Path, default=PROJECT_ROOT / "dependencies.lock.json")
-    parser.add_argument("--platform", required=True, choices=["windows-x64", "macos-arm64"])
+    parser.add_argument(
+        "--platform", required=True, choices=["windows-x64", "macos-arm64", "macos-x64"]
+    )
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args(argv)
     with args.lock.open("r", encoding="utf-8") as handle:

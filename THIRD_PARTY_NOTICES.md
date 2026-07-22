@@ -1,6 +1,6 @@
 # Third-party notices
 
-mpv-lazy-enjoy 的自有配置、构建脚本和文档采用 MIT 许可证。该许可不覆盖随包分发的第三方程序。
+mpv-enjoy 的自有配置、构建脚本和文档采用 MIT 许可证。该许可不覆盖随包分发的第三方程序。
 
 | 组件 | 固定版本 | 许可证 | 用途 |
 | --- | --- | --- | --- |
@@ -12,7 +12,7 @@ mpv-lazy-enjoy 的自有配置、构建脚本和文档采用 MIT 许可证。该
 
 精确提交、下载地址和 SHA-256 位于 `dependencies.lock.json`。上游许可证全文位于发行包的
 `LICENSES` 目录，相应源码归档位于 `sources` 目录。uosc 与 uosc_danmaku 的包内更新入口经过
-修改，只提示更新整个 mpv-lazy-enjoy 包；此修改不改变其原许可证。
+修改，只提示更新整个 mpv-enjoy 包；此修改不改变其原许可证。
 
 mpv 会动态链接 FFmpeg、libass、libplacebo、LuaJIT 及平台构建环境提供的其他库。实际构建所用
 包版本记录在发行包的 `BUILD-DEPENDENCIES.txt`；这些库各自保留其上游许可证。公开再分发者应
