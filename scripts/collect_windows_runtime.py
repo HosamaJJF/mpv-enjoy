@@ -3,6 +3,7 @@
 
 import argparse
 import hashlib
+import os
 from pathlib import Path
 import re
 import shutil
@@ -26,22 +27,58 @@ def digest(path: Path) -> str:
     return result.hexdigest()
 
 
+def parse_ldd_references(output: str) -> Iterable[str]:
+    for line in output.splitlines():
+        if "=>" not in line:
+            continue
+        reference = line.split("=>", 1)[1].strip()
+        reference = re.sub(r"\s+\(0x[0-9a-fA-F]+\)\s*$", "", reference)
+        if reference and reference.lower() != "not found":
+            yield reference
+
+
+def msys_virtual_path(reference: str, executable: Path, msystem: str) -> Optional[Path]:
+    if not reference.startswith("/") or not msystem:
+        return None
+    for parent in executable.resolve().parents:
+        if parent.name.lower() == msystem.lower():
+            return parent.parent.joinpath(*reference.lstrip("/").split("/"))
+    return None
+
+
+def resolve_dependency(reference: str) -> Optional[Path]:
+    candidate = Path(reference)
+    if candidate.is_file():
+        return candidate
+    if os.name == "nt" and reference.startswith("/"):
+        candidate = msys_virtual_path(
+            reference, Path(sys.executable), os.environ.get("MSYSTEM", "")
+        )
+        if candidate is not None and candidate.is_file():
+            return candidate
+    filename = reference.replace("\\", "/").rsplit("/", 1)[-1]
+    located = shutil.which(filename)
+    if located is not None and Path(located).is_file():
+        return Path(located)
+    return None
+
+
 def ldd_paths(binary: Path) -> Iterable[Path]:
     result = subprocess.run(
         ["ldd", str(binary)], text=True, capture_output=True, check=True
     )
-    for line in result.stdout.splitlines():
-        match = re.search(r"=>\s+(\S+)\s+\(0x", line)
-        if match is None:
-            match = re.search(r"^\s*(/\S+)\s+\(0x", line)
-        if match is None:
-            continue
-        path = Path(match.group(1))
-        normalized = str(path).replace("\\", "/").lower()
+    output = result.stdout + "\n" + result.stderr
+    references = list(parse_ldd_references(output))
+    if not references:
+        raise CollectionError("ldd returned no dependency paths:\n{}".format(output.strip()))
+    for reference in references:
+        normalized = reference.replace("\\", "/").lower()
         if "/windows/system32/" in normalized or normalized.startswith("/c/windows/"):
             continue
-        if path.is_file():
-            yield path
+        path = resolve_dependency(reference)
+        if path is None:
+            raise CollectionError("Could not locate DLL dependency: {}".format(reference))
+        yield path
 
 
 def assert_safe_output(path: Path) -> None:
@@ -81,6 +118,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                 continue
             shutil.copy2(str(dependency), str(destination))
             copied.add(key)
+        if not copied:
+            raise CollectionError("ldd reported no non-system DLL dependencies")
     except (CollectionError, OSError, subprocess.CalledProcessError) as error:
         print("error: {}".format(error), file=sys.stderr)
         return 1

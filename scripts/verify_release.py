@@ -3,11 +3,14 @@
 
 import argparse
 import json
+import os
 from pathlib import Path
+import plistlib
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from typing import Dict, List, Optional
 
 
@@ -118,13 +121,51 @@ def main(argv: Optional[List[str]] = None) -> int:
         else:
             app = args.release / "mpv-lazy-enjoy.app"
             require(app.is_dir(), "Missing mpv-lazy-enjoy.app")
+            launcher = app / "Contents" / "MacOS" / "mpv"
+            helper = app / "Contents" / "Resources" / "macos-launcher.sh"
+            require(launcher.is_file(), "Missing native macOS launcher")
+            require(os.access(str(launcher), os.X_OK), "macOS launcher is not executable")
+            require(helper.is_file(), "Missing macOS launcher helper")
             require((app / "Contents" / "MacOS" / "yt-dlp").is_file(), "Missing macOS yt-dlp")
             config = app / "Contents" / "Resources" / "config-template"
             description = file_description(app / "Contents" / "MacOS" / "mpv-bin")
+            launcher_description = file_description(launcher)
             if "unavailable" not in description:
                 require("arm64" in description, "Wrong mpv architecture: {}".format(description))
                 require("x86_64" not in description, "mpv-bin must be native arm64, not Universal")
+            if "unavailable" not in launcher_description:
+                require(
+                    "Mach-O" in launcher_description and "arm64" in launcher_description,
+                    "macOS launcher must be a native arm64 Mach-O executable: {}".format(
+                        launcher_description
+                    ),
+                )
+                require(
+                    "x86_64" not in launcher_description,
+                    "macOS launcher must not be Universal",
+                )
+            with (app / "Contents" / "Info.plist").open("rb") as handle:
+                plist = plistlib.load(handle)
+            require(plist.get("CFBundleExecutable") == "mpv", "Unexpected CFBundleExecutable")
+            if sys.platform == "darwin":
+                with tempfile.TemporaryDirectory(prefix="mpv-lazy-enjoy-smoke-") as temporary:
+                    environment = os.environ.copy()
+                    environment["MPV_LAZY_ENJOY_HOME"] = temporary
+                    smoke = subprocess.run(
+                        [str(launcher), "--version"],
+                        text=True,
+                        capture_output=True,
+                        env=environment,
+                        timeout=30,
+                    )
+                require(
+                    smoke.returncode == 0 and "mpv" in smoke.stdout.lower(),
+                    "macOS launcher smoke test failed: {}".format(
+                        (smoke.stderr or smoke.stdout).strip()
+                    ),
+                )
             report["mpv"] = description
+            report["launcher"] = launcher_description
         report.update(verify_config(config, args.platform))
     except (VerificationError, OSError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
         print("error: {}".format(error), file=sys.stderr)

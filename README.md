@@ -38,7 +38,9 @@ Windows 使用 `portable_config`。macOS 启动器使用独立目录
 ```
 
 Windows 脚本从源码编译 mpv，递归收集非系统 DLL，再组装便携包。macOS 脚本从源码编译原生
-arm64 `mpv.app`，嵌入独立配置与 yt-dlp，最后使用 ad-hoc 身份签名。无付费 Apple Developer
+arm64 `mpv.app`，使用原生 arm64 启动器初始化独立配置并调用 mpv，嵌入 yt-dlp，最后使用
+ad-hoc 身份签名。CI 会通过 LaunchServices 实际启动应用，避免仅验证签名却上传无法由 Finder
+打开的包。无付费 Apple Developer
 账号时无法提供 Developer ID 公证；首次启动应使用 Finder 右键“打开”或系统设置中的“仍要
 打开”，不应全局关闭 Gatekeeper。
 
