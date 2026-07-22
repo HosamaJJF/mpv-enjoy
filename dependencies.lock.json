@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-22T00:00:00Z",
+  "project_version": "0.1.0-dev",
+  "components": {
+    "mpv": {
+      "version": "0.41.0",
+      "ref": "v0.41.0",
+      "commit": "41f6a645068483470267271e1d09966ca3b9f413",
+      "repository": "https://github.com/mpv-player/mpv",
+      "url": "https://codeload.github.com/mpv-player/mpv/tar.gz/41f6a645068483470267271e1d09966ca3b9f413",
+      "filename": "mpv-0.41.0.tar.gz",
+      "sha256": "068960e89211f2adc80af03f637fa393fb5e407d3dd23592c8fe8c5490bb7ae4",
+      "license": "GPL-2.0-or-later AND LGPL-2.1-or-later"
+    },
+    "uosc": {
+      "version": "5.12.0",
+      "ref": "5.12.0",
+      "commit": "748bb238a962f8aecd0af51ee4b46651b58f6c51",
+      "repository": "https://github.com/tomasklaen/uosc",
+      "url": "https://codeload.github.com/tomasklaen/uosc/tar.gz/748bb238a962f8aecd0af51ee4b46651b58f6c51",
+      "filename": "uosc-5.12.0.tar.gz",
+      "sha256": "cc2cd65f964d40e13dd9f3d23820d2c93a00911b99352868705a9614e3259723",
+      "license": "LGPL-2.1-only"
+    },
+    "uosc_danmaku": {
+      "version": "2.2.0",
+      "ref": "main@2026-06-26",
+      "commit": "8fb2107d1e04ce1fd700496ca7d2e4a62182016a",
+      "repository": "https://github.com/Tony15246/uosc_danmaku",
+      "url": "https://codeload.github.com/Tony15246/uosc_danmaku/tar.gz/8fb2107d1e04ce1fd700496ca7d2e4a62182016a",
+      "filename": "uosc_danmaku-2.2.0-8fb2107.tar.gz",
+      "sha256": "3225b4cb81328b05800075d2de41b4ace198d744ec35282fd77aa287f4a44917",
+      "license": "MIT"
+    },
+    "thumbfast": {
+      "version": "0.0.0+20260628",
+      "ref": "master@2026-06-28",
+      "commit": "0f711de3138c9bd6718209d819ac54022c23ded2",
+      "repository": "https://github.com/po5/thumbfast",
+      "url": "https://codeload.github.com/po5/thumbfast/tar.gz/0f711de3138c9bd6718209d819ac54022c23ded2",
+      "filename": "thumbfast-0f711de.tar.gz",
+      "sha256": "2d16e9172750c222f7357e3523e41ee9da8fc148fb1e4c0d5f6ac8a317c3a96e",
+      "license": "MPL-2.0"
+    },
+    "yt_dlp_source": {
+      "version": "2026.06.09",
+      "ref": "2026.06.09",
+      "repository": "https://github.com/yt-dlp/yt-dlp",
+      "url": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.06.09/yt-dlp.tar.gz",
+      "filename": "yt-dlp-2026.06.09.tar.gz",
+      "sha256": "7603f876b78d08b5fdd5bcd1d368590fde22c3c18e4ea00766d51120d21cc679",
+      "license": "Unlicense"
+    }
+  },
+  "platform_assets": {
+    "windows-x64": {
+      "yt_dlp": {
+        "version": "2026.06.09",
+        "url": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.06.09/yt-dlp.exe",
+        "filename": "yt-dlp.exe",
+        "sha256": "3a48cb955d55c8821b60ccbdbbc6f61bc958f2f3d3b7ad5eaf3d83a543293a27",
+        "license": "Unlicense AND LicenseRef-yt-dlp-bundled"
+      }
+    },
+    "macos-arm64": {
+      "yt_dlp": {
+        "version": "2026.06.09",
+        "url": "https://github.com/yt-dlp/yt-dlp/releases/download/2026.06.09/yt-dlp_macos",
+        "filename": "yt-dlp_macos",
+        "sha256": "b82c3626952e6c14eaf654cc565866775ffd0b9ffb7021628ac59b42c2f4f244",
+        "license": "Unlicense AND LicenseRef-yt-dlp-bundled"
+      }
+    }
+  }
+}

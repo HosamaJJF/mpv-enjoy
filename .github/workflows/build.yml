@@ -1,0 +1,94 @@
+name: Build
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/build.yml'
+      - 'config/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'dependencies.lock.json'
+
+permissions:
+  contents: read
+
+jobs:
+  windows-x64:
+    runs-on: windows-2025
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.25.x'
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: CLANG64
+          update: true
+          install: >-
+            git
+            file
+            mingw-w64-clang-x86_64-clang
+            mingw-w64-clang-x86_64-ffmpeg
+            mingw-w64-clang-x86_64-libarchive
+            mingw-w64-clang-x86_64-libass
+            mingw-w64-clang-x86_64-libjpeg-turbo
+            mingw-w64-clang-x86_64-libplacebo
+            mingw-w64-clang-x86_64-luajit
+            mingw-w64-clang-x86_64-lcms2
+            mingw-w64-clang-x86_64-meson
+            mingw-w64-clang-x86_64-ninja
+            mingw-w64-clang-x86_64-pkgconf
+            mingw-w64-clang-x86_64-python
+            mingw-w64-clang-x86_64-uchardet
+            mingw-w64-clang-x86_64-vulkan-headers
+      - uses: actions/cache@v4
+        with:
+          path: .cache/downloads
+          key: mpv-lazy-enjoy-downloads-windows-x64-${{ hashFiles('dependencies.lock.json') }}
+      - name: Unit tests
+        run: python3 -m unittest discover -s tests -v
+      - name: Build and package
+        run: bash scripts/build-windows-msys2.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mpv-lazy-enjoy-windows-x64
+          path: |
+            dist/mpv-lazy-enjoy-0.1.0-dev-windows-x64.zip
+            dist/SHA256SUMS
+          if-no-files-found: error
+
+  macos-arm64:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.25.x'
+      - uses: actions/cache@v4
+        with:
+          path: .cache/downloads
+          key: mpv-lazy-enjoy-downloads-macos-arm64-${{ hashFiles('dependencies.lock.json') }}
+      - name: Install native build dependencies
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: '1'
+        run: >-
+          brew install
+          autoconf automake pkgconf libtool python freetype fribidi little-cms2 libarchive
+          luajit libass ffmpeg meson rust uchardet mujs libplacebo
+          molten-vk vulkan-loader vulkan-headers
+      - name: Unit tests
+        run: python3 -m unittest discover -s tests -v
+      - name: Build, ad-hoc sign and package
+        run: bash scripts/build-macos-arm64.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mpv-lazy-enjoy-macos-arm64
+          path: |
+            dist/mpv-lazy-enjoy-0.1.0-dev-macos-arm64.zip
+            dist/mpv-lazy-enjoy-0.1.0-dev-macos-arm64.dmg
+            dist/SHA256SUMS
+          if-no-files-found: error
