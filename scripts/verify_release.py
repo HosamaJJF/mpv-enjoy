@@ -112,6 +112,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         require((args.release / "SBOM.spdx.json").is_file(), "Missing SPDX SBOM")
         require((args.release / "dependencies.lock.json").is_file(), "Missing dependency lock")
         require((args.release / "LICENSES").is_dir(), "Missing licenses")
+        require(
+            (args.release / "LICENSES" / "mpv-enjoy-MIT.md").is_file(),
+            "Missing mpv-enjoy MIT license",
+        )
         require((args.release / "sources").is_dir(), "Missing corresponding source archives")
         json.loads((args.release / "SBOM.spdx.json").read_text(encoding="utf-8"))
 

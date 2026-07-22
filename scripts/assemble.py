@@ -174,8 +174,7 @@ def copy_licenses_and_sources(
     sources = release_root / "sources"
     licenses.mkdir(parents=True, exist_ok=True)
     sources.mkdir(parents=True, exist_ok=True)
-    copy_file(PROJECT_ROOT / "LICENSE", licenses / "mpv-enjoy-MIT.txt")
-    copy_file(PROJECT_ROOT / "THIRD_PARTY_NOTICES.md", release_root / "THIRD_PARTY_NOTICES.md")
+    copy_file(PROJECT_ROOT / "LICENSE.MD", licenses / "mpv-enjoy-MIT.md")
 
     candidates = {
         "mpv-GPL-2.0.txt": extracted["mpv"] / "LICENSE.GPL",
@@ -235,7 +234,7 @@ def write_release_readme(release_root: Path, platform: str) -> None:
 
 弹幕默认采用手动搜索：`Ctrl+d` 打开搜索，`j` 开关弹幕；uosc 控制栏也提供搜索、开关和设置按钮。
 
-依赖版本见 `dependencies.lock.json`，许可证见 `THIRD_PARTY_NOTICES.md` 和 `LICENSES`，
+依赖版本见 `dependencies.lock.json`，许可证见 `LICENSES`，
 对应上游源码归档位于 `sources`。
 """.format(platform=platform, instructions=instructions)
     write_text(release_root / "README-FIRST.zh-CN.md", text)

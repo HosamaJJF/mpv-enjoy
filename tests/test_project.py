@@ -57,6 +57,20 @@ class DependencyLockTests(unittest.TestCase):
         self.assertIn("uosc_danmaku", names)
         self.assertIn("yt-dlp-binary-macos-x64", names)
 
+        project = next(
+            package for package in sbom["packages"] if package["name"] == "mpv-enjoy"
+        )
+        self.assertEqual(project["licenseDeclared"], "MIT")
+        self.assertEqual(project["licenseConcluded"], "MIT")
+
+    def test_license_consolidates_project_and_third_party_terms(self):
+        license_text = (PROJECT_ROOT / "LICENSE.MD").read_text(encoding="utf-8")
+        self.assertIn("MIT License", license_text)
+        self.assertIn("Copyright (c) 2026 mpv-enjoy contributors", license_text)
+        self.assertIn("mpv-player/mpv", license_text)
+        self.assertIn("Tony15246/uosc_danmaku", license_text)
+        self.assertFalse((PROJECT_ROOT / "THIRD_PARTY_NOTICES.md").exists())
+
 
 class ArchiveSafetyTests(unittest.TestCase):
     def test_rejects_path_traversal(self):
