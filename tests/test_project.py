@@ -100,8 +100,13 @@ class ConfigurationTests(unittest.TestCase):
         launcher = (PROJECT_ROOT / "scripts" / "macos-launcher.sh").read_text(
             encoding="utf-8"
         )
+        native_launcher = (PROJECT_ROOT / "scripts" / "macos-launcher.c").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("Library/Application Support/mpv-lazy-enjoy", launcher)
         self.assertIn('--config-dir="$MPV_LAZY_ENJOY_CONFIG_DIR"', launcher)
+        self.assertIn("_NSGetExecutablePath", native_launcher)
+        self.assertIn('child_argv[0] = "/bin/sh"', native_launcher)
         self.assertNotIn("spctl --master-disable", launcher)
         self.assertNotIn("xattr -dr", launcher)
 
@@ -125,19 +130,26 @@ class ScriptSyntaxTests(unittest.TestCase):
             compile(source, str(script), "exec")
 
     def test_shell_scripts_parse(self):
-        bash_scripts = [
-            PROJECT_ROOT / "scripts" / "build-windows-msys2.sh",
-            PROJECT_ROOT / "scripts" / "build-macos-arm64.sh",
+        scripts = [
+            ("bash", "scripts/build-windows-msys2.sh"),
+            ("bash", "scripts/build-macos-arm64.sh"),
+            ("sh", "scripts/macos-launcher.sh"),
         ]
-        for script in bash_scripts:
-            result = subprocess.run(["bash", "-n", str(script)], capture_output=True, text=True)
-            self.assertEqual(result.returncode, 0, result.stderr)
-        result = subprocess.run(
-            ["sh", "-n", str(PROJECT_ROOT / "scripts" / "macos-launcher.sh")],
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
+        for shell, script in scripts:
+            with self.subTest(script=script):
+                result = subprocess.run(
+                    [shell, "-n", script],
+                    cwd=str(PROJECT_ROOT),
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(
+                    result.returncode,
+                    0,
+                    "{} failed:\nstdout: {}\nstderr: {}".format(
+                        script, result.stdout, result.stderr
+                    ),
+                )
 
 
 if __name__ == "__main__":

@@ -264,6 +264,31 @@ def update_info_plist(app: Path, project_version: str) -> None:
         plistlib.dump(plist, handle, sort_keys=True)
 
 
+def compile_macos_launcher(destination: Path) -> None:
+    clang = shutil.which("clang")
+    if clang is None:
+        raise AssemblyError("clang is required to build the macOS launcher")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        [
+            clang,
+            "-std=c11",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-Os",
+            "-arch",
+            "arm64",
+            "-mmacosx-version-min=14.0",
+            str(PROJECT_ROOT / "scripts" / "macos-launcher.c"),
+            "-o",
+            str(destination),
+        ],
+        check=True,
+    )
+    destination.chmod(destination.stat().st_mode | 0o755)
+
+
 def assemble_macos(
     mpv_path: Path,
     release_root: Path,
@@ -283,7 +308,8 @@ def assemble_macos(
     if not binary.is_file():
         raise AssemblyError("mpv.app is missing Contents/MacOS/mpv")
     binary.rename(macos_dir / "mpv-bin")
-    copy_file(PROJECT_ROOT / "scripts" / "macos-launcher.sh", binary, executable=True)
+    compile_macos_launcher(binary)
+    copy_file(PROJECT_ROOT / "scripts" / "macos-launcher.sh", resources / "macos-launcher.sh")
     copy_file(yt_dlp, macos_dir / "yt-dlp", executable=True)
     shutil.copytree(str(config_dir), str(resources / "config-template"))
     update_info_plist(app, project_version)

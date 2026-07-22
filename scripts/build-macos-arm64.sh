@@ -94,6 +94,10 @@ if ! /usr/bin/file "$MPV_LAZY_ENJOY_APP/Contents/MacOS/mpv-bin" | /usr/bin/grep 
     echo "mpv-bin is not arm64" >&2
     exit 1
 fi
+if ! /usr/bin/file "$MPV_LAZY_ENJOY_APP/Contents/MacOS/mpv" | /usr/bin/grep -q 'Mach-O 64-bit executable arm64'; then
+    echo "macOS launcher is not a native arm64 Mach-O executable" >&2
+    exit 1
+fi
 if ! /usr/bin/file "$MPV_LAZY_ENJOY_APP/Contents/Resources/config-template/scripts/uosc/bin/ziggy-darwin" | /usr/bin/grep -q arm64; then
     echo "ziggy-darwin is not arm64" >&2
     exit 1
@@ -103,6 +107,9 @@ fi
     "$MPV_LAZY_ENJOY_APP/Contents/Resources/config-template/scripts/uosc/bin/ziggy-darwin"
 /usr/bin/codesign --force --deep --sign - --timestamp=none "$MPV_LAZY_ENJOY_APP"
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$MPV_LAZY_ENJOY_APP"
+
+# Exercise the same LaunchServices path Finder uses. The app exits after printing its version.
+/usr/bin/open -W -n "$MPV_LAZY_ENJOY_APP" --args --version
 
 python3 scripts/write_checksums.py "$MPV_LAZY_ENJOY_RELEASE_DIR"
 python3 scripts/verify_release.py \
@@ -119,6 +126,7 @@ python3 scripts/verify_release.py \
     -ov \
     -format UDZO \
     "$MPV_LAZY_ENJOY_DIST_DIR/mpv-lazy-enjoy-0.1.0-dev-macos-arm64.dmg"
+/usr/bin/hdiutil verify "$MPV_LAZY_ENJOY_DIST_DIR/mpv-lazy-enjoy-0.1.0-dev-macos-arm64.dmg"
 python3 scripts/write_checksums.py "$MPV_LAZY_ENJOY_DIST_DIR"
 
 echo "macOS packages are in: $MPV_LAZY_ENJOY_DIST_DIR"
