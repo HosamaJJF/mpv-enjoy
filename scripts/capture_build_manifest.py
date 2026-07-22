@@ -9,10 +9,15 @@ from typing import List, Optional, Sequence, Tuple
 
 
 def capture(command: Sequence[str]) -> str:
-    result = subprocess.run(command, text=True, capture_output=True, check=False)
+    try:
+        result = subprocess.run(command, text=True, capture_output=True, check=False)
+    except OSError as error:
+        return "[unavailable] {}: {}".format(command[0], error)
     output = result.stdout.strip()
     if result.stderr.strip():
         output += "\n[stderr]\n" + result.stderr.strip()
+    if result.returncode:
+        output += "\n[exit code {}]".format(result.returncode)
     return output
 
 
@@ -29,7 +34,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         ("Compiler", ["clang", "--version"]),
     ]
     if args.platform == "windows-x64":
-        commands.append(("MSYS2 packages", ["pacman", "-Q"]))
+        commands.append(("MSYS2 packages", ["sh", "-lc", "pacman -Q"]))
     else:
         commands.append(("Homebrew packages", ["brew", "list", "--versions"]))
         commands.append(("Xcode", ["xcodebuild", "-version"]))

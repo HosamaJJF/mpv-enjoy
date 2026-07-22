@@ -14,6 +14,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 
 from fetch_dependencies import DependencyError, load_lock, safe_extract_tar  # noqa: E402
 from generate_sbom import build_sbom  # noqa: E402
+from collect_windows_runtime import parse_ldd_references  # noqa: E402
 
 
 class DependencyLockTests(unittest.TestCase):
@@ -67,6 +68,24 @@ class ArchiveSafetyTests(unittest.TestCase):
             with self.assertRaises(DependencyError):
                 safe_extract_tar(archive, root / "output")
             self.assertFalse((root / "escaped.txt").exists())
+
+
+class WindowsRuntimeTests(unittest.TestCase):
+    def test_parses_modern_msys2_ldd_paths(self):
+        output = "\n".join(
+            [
+                "KERNEL32.dll => C:\\Windows\\System32\\KERNEL32.dll (0x7ffa0000)",
+                "avcodec-62.dll => D:\\a\\_temp\\msys64\\clang64\\bin\\avcodec-62.dll",
+                "missing.dll => not found",
+            ]
+        )
+        self.assertEqual(
+            list(parse_ldd_references(output)),
+            [
+                "C:\\Windows\\System32\\KERNEL32.dll",
+                "D:\\a\\_temp\\msys64\\clang64\\bin\\avcodec-62.dll",
+            ],
+        )
 
 
 class ConfigurationTests(unittest.TestCase):
