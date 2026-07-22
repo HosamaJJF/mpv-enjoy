@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "generated_at": "2026-07-22T00:00:00Z",
-  "project_version": "0.1.0-dev",
+  "project_version": "1.0.0",
   "components": {
     "mpv": {
       "version": "0.41.0",

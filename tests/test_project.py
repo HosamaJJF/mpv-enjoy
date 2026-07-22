@@ -33,6 +33,7 @@ class DependencyLockTests(unittest.TestCase):
             self.assertNotIn("/main/", spec["url"])
 
     def test_target_architectures_are_exact(self):
+        self.assertEqual(self.lock["project_version"], "1.0.0")
         self.assertEqual(
             set(self.lock["platform_assets"]),
             {"windows-x64", "macos-arm64", "macos-x64"},

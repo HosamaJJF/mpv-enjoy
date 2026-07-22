@@ -47,13 +47,13 @@ python3 -m unittest discover -s tests -v
 
 python3 scripts/verify_release.py \
   --platform windows-x64 \
-  --release build/release/mpv-enjoy-0.1.0-dev-windows-x64
+  --release build/release/mpv-enjoy-1.0.0-windows-x64
 
 python3 scripts/verify_release.py \
   --platform macos-arm64 \
-  --release build/release/mpv-enjoy-0.1.0-dev-macos-arm64
+  --release build/release/mpv-enjoy-1.0.0-macos-arm64
 
 python3 scripts/verify_release.py \
   --platform macos-x64 \
-  --release build/release/mpv-enjoy-0.1.0-dev-macos-x64
+  --release build/release/mpv-enjoy-1.0.0-macos-x64
 ```
