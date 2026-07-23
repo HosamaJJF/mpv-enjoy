@@ -272,6 +272,14 @@ def write_metadata(
     build_manifest: Optional[Path],
 ) -> None:
     copy_file(PROJECT_ROOT / "dependencies.lock.json", release_root / "dependencies.lock.json")
+    release_notes = (
+        PROJECT_ROOT
+        / "release-notes"
+        / ("v" + str(lock["project_version"]) + ".md")
+    )
+    if not release_notes.is_file():
+        raise AssemblyError("Missing release notes: {}".format(release_notes))
+    copy_file(release_notes, release_root / "RELEASE-NOTES.zh-CN.md")
     if build_manifest is not None:
         if not build_manifest.is_file():
             raise AssemblyError("Build manifest does not exist: {}".format(build_manifest))
@@ -304,6 +312,7 @@ def write_release_readme(release_root: Path, platform: str) -> None:
 
 弹幕默认采用手动搜索：`Ctrl+d` 打开搜索，`j` 开关弹幕；uosc 控制栏也提供搜索、开关和设置按钮。
 VideoTogether 可通过 uosc 控制栏的“一起看”按钮创建或加入房间。
+本版本更新内容见 `RELEASE-NOTES.zh-CN.md`。
 
 依赖版本见 `dependencies.lock.json`，许可证见 `LICENSES`，
 对应上游源码归档位于 `sources`。
@@ -331,8 +340,9 @@ def update_info_plist(app: Path, project_version: str) -> None:
     plist["CFBundleIdentifier"] = "io.github.hosamajjf.mpv-enjoy"
     plist["CFBundleName"] = "mpv-enjoy"
     plist["CFBundleDisplayName"] = "mpv-enjoy"
-    plist["CFBundleShortVersionString"] = project_version.split("-")[0]
-    plist["CFBundleVersion"] = "1"
+    release_version = project_version.split("-")[0]
+    plist["CFBundleShortVersionString"] = release_version
+    plist["CFBundleVersion"] = release_version
     plist["LSMinimumSystemVersion"] = "14.0"
     with plist_path.open("wb") as handle:
         plistlib.dump(plist, handle, sort_keys=True)

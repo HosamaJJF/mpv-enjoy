@@ -2,6 +2,7 @@ import io
 import json
 import os
 from pathlib import Path
+import plistlib
 import subprocess
 import sys
 import tarfile
@@ -14,7 +15,11 @@ sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 
 from fetch_dependencies import DependencyError, load_lock, safe_extract_tar  # noqa: E402
 from generate_sbom import build_sbom  # noqa: E402
-from assemble import configure_videotogether  # noqa: E402
+from assemble import (  # noqa: E402
+    configure_videotogether,
+    update_info_plist,
+    write_metadata,
+)
 from collect_windows_runtime import msys_virtual_path, parse_ldd_references  # noqa: E402
 
 
@@ -34,7 +39,7 @@ class DependencyLockTests(unittest.TestCase):
             self.assertNotIn("/main/", spec["url"])
 
     def test_target_architectures_are_exact(self):
-        self.assertEqual(self.lock["project_version"], "1.0.0")
+        self.assertEqual(self.lock["project_version"], "1.1.0")
         self.assertEqual(
             set(self.lock["platform_assets"]),
             {"windows-x64", "macos-arm64", "macos-x64"},
@@ -79,6 +84,19 @@ class DependencyLockTests(unittest.TestCase):
         self.assertIn("Tony15246/uosc_danmaku", license_text)
         self.assertIn("HosamaJJF/uosc_videotogether", license_text)
         self.assertFalse((PROJECT_ROOT / "THIRD_PARTY_NOTICES.md").exists())
+
+    def test_release_metadata_includes_versioned_notes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            release = Path(temporary) / "release"
+            release.mkdir()
+
+            write_metadata(release, self.lock, "windows-x64", None)
+
+            notes = release / "RELEASE-NOTES.zh-CN.md"
+            self.assertTrue(notes.is_file())
+            self.assertIn("mpv-enjoy 1.1.0", notes.read_text(encoding="utf-8"))
+            checksums = (release / "SHA256SUMS").read_text(encoding="utf-8")
+            self.assertIn("RELEASE-NOTES.zh-CN.md", checksums)
 
 
 class ArchiveSafetyTests(unittest.TestCase):
@@ -151,7 +169,7 @@ class ConfigurationTests(unittest.TestCase):
             "on=toggle_on/off=toggle_off?弹幕开关,"
             "button:danmaku_menu,button:videotogether,gap,space,"
             "<video,audio>speed,space,shuffle,loop-playlist,loop-file,"
-            "gap,prev,items,next,gap,fullscreen",
+            "gap,prev,items,next,gap,play-pause,gap,fullscreen",
         )
 
     def test_videotogether_config_avoids_existing_shortcut_conflict(self):
@@ -199,6 +217,38 @@ class ConfigurationTests(unittest.TestCase):
         self.assertIn("auto_load=no", config)
         self.assertIn("autoload_for_url=no", config)
         self.assertIn("history_path=~~/danmaku-history.json", config)
+        self.assertIn("vf_fps=yes", config)
+        self.assertIn("fps=60/1.001", config)
+        self.assertIn("fontsize=30", config)
+
+    def test_release_version_is_consistent(self):
+        paths = [
+            PROJECT_ROOT / "README.md",
+            PROJECT_ROOT / "scripts" / "build-windows-msys2.sh",
+            PROJECT_ROOT / "scripts" / "build-macos.sh",
+            PROJECT_ROOT / ".github" / "workflows" / "build.yml",
+        ]
+        for path in paths:
+            with self.subTest(path=path):
+                text = path.read_text(encoding="utf-8")
+                self.assertIn("mpv-enjoy-1.1.0", text)
+                self.assertNotIn("mpv-enjoy-1.0.0", text)
+
+    def test_release_notes_cover_1_1_0_changes(self):
+        notes = (
+            PROJECT_ROOT / "release-notes" / "v1.1.0.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("VideoTogether", notes)
+        self.assertIn("播放/暂停", notes)
+        self.assertIn("vf_fps=yes", notes)
+        self.assertIn("vf_fps=no", notes)
+        self.assertIn("fontsize=30", notes)
+        self.assertIn("portable_config/script-opts/uosc_danmaku.conf", notes)
+        self.assertIn(
+            "~/Library/Application Support/mpv-enjoy/config/script-opts/"
+            "uosc_danmaku.conf",
+            notes,
+        )
 
     def test_macos_launcher_uses_app_support_and_does_not_disable_gatekeeper(self):
         launcher = (PROJECT_ROOT / "scripts" / "macos-launcher.sh").read_text(
@@ -214,6 +264,21 @@ class ConfigurationTests(unittest.TestCase):
         self.assertIn("uosc_videotogether.conf", launcher)
         self.assertNotIn("spctl --master-disable", launcher)
         self.assertNotIn("xattr -dr", launcher)
+
+    def test_macos_bundle_uses_release_version(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            app = Path(temporary) / "mpv-enjoy.app"
+            plist_path = app / "Contents" / "Info.plist"
+            plist_path.parent.mkdir(parents=True)
+            with plist_path.open("wb") as handle:
+                plistlib.dump({"CFBundleExecutable": "mpv"}, handle)
+
+            update_info_plist(app, "1.1.0")
+
+            with plist_path.open("rb") as handle:
+                plist = plistlib.load(handle)
+            self.assertEqual(plist["CFBundleShortVersionString"], "1.1.0")
+            self.assertEqual(plist["CFBundleVersion"], "1.1.0")
 
     def test_danmaku_bridge_reannounces_uosc_and_buttons(self):
         bridge = (

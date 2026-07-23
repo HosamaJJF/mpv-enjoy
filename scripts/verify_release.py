@@ -146,6 +146,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         require(args.release.is_dir(), "Release directory does not exist")
         require((args.release / "SBOM.spdx.json").is_file(), "Missing SPDX SBOM")
         require((args.release / "dependencies.lock.json").is_file(), "Missing dependency lock")
+        require(
+            (args.release / "RELEASE-NOTES.zh-CN.md").is_file(),
+            "Missing release notes",
+        )
         require((args.release / "LICENSES").is_dir(), "Missing licenses")
         require(
             (args.release / "LICENSES" / "mpv-enjoy-MIT.md").is_file(),
