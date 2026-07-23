@@ -250,15 +250,11 @@ class ConfigurationTests(unittest.TestCase):
             notes,
         )
 
-    def test_readme_describes_1_1_0_user_facing_changes(self):
+    def test_readme_lists_videotogether_with_integrated_components(self):
         readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertIn("## 1.1.0 更新", readme)
-        self.assertIn("VideoTogether", readme)
-        self.assertIn("播放/暂停", readme)
-        self.assertIn("vf_fps=yes", readme)
-        self.assertIn("vf_fps=no", readme)
-        self.assertIn("fontsize=30", readme)
-        self.assertIn("release-notes/v1.1.0.md", readme)
+        introduction = readme.split("## 修改配置", 1)[0]
+        self.assertIn("uosc_videotogether", introduction)
+        self.assertNotIn("## 1.1.0 更新", readme)
 
     def test_macos_launcher_uses_app_support_and_does_not_disable_gatekeeper(self):
         launcher = (PROJECT_ROOT / "scripts" / "macos-launcher.sh").read_text(

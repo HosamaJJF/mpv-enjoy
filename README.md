@@ -10,20 +10,6 @@ mpv_PlayKit，制作了这套面向 Windows 和 macOS 的开箱即用 mpv 整合
 yt-dlp。由于需要兼顾多个平台，未沿用 mpv_PlayKit 中的各类着色器整合；有需要时可自行
 添加适合设备和平台的着色器与配置。
 
-## 1.1.0 更新
-
-- 加入移植版 VideoTogether 同步观影插件。
-- uosc 控制栏右侧添加播放/暂停按钮。
-- uosc_danmaku 默认开启弹幕帧数滤镜（`vf_fps=yes`，`fps=60/1.001`）。该滤镜会增加
-  性能开销；如需关闭，请在对应配置文件中设置 `vf_fps=no`：
-
-    - Windows：`portable_config/script-opts/uosc_danmaku.conf`
-    - macOS：`~/Library/Application Support/mpv-enjoy/config/script-opts/uosc_danmaku.conf`
-
-- 弹幕默认字体大小修改为 30（`fontsize=30`）。
-
-完整发布说明见 [`release-notes/v1.1.0.md`](release-notes/v1.1.0.md)。
-
 ## 修改配置
 
 Windows 版本的配置位于程序目录下的 `portable_config`。推荐把自定义 mpv 选项写入
