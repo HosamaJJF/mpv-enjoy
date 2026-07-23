@@ -21,7 +21,7 @@ do
     fi
 done
 
-for MPV_ENJOY_OPTION_FILE in uosc.conf uosc_danmaku.conf thumbfast.conf
+for MPV_ENJOY_OPTION_FILE in uosc.conf uosc_danmaku.conf uosc_videotogether.conf thumbfast.conf
 do
     if [ ! -e "$MPV_ENJOY_CONFIG_DIR/script-opts/$MPV_ENJOY_OPTION_FILE" ]; then
         /bin/cp "$MPV_ENJOY_TEMPLATE_DIR/script-opts/$MPV_ENJOY_OPTION_FILE" "$MPV_ENJOY_CONFIG_DIR/script-opts/$MPV_ENJOY_OPTION_FILE"

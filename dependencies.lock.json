@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-07-22T00:00:00Z",
-  "project_version": "1.0.0",
+  "generated_at": "2026-07-23T00:00:00Z",
+  "project_version": "1.1.0",
   "components": {
     "mpv": {
       "version": "0.41.0",
@@ -32,6 +32,16 @@
       "filename": "uosc_danmaku-2.2.0-8fb2107.tar.gz",
       "sha256": "3225b4cb81328b05800075d2de41b4ace198d744ec35282fd77aa287f4a44917",
       "license": "MIT"
+    },
+    "uosc_videotogether": {
+      "version": "1.0.0",
+      "ref": "v1.0.0",
+      "commit": "1a4dc93f435eac1c0871a8b1e802155f19862375",
+      "repository": "https://github.com/HosamaJJF/uosc_videotogether",
+      "url": "https://codeload.github.com/HosamaJJF/uosc_videotogether/tar.gz/1a4dc93f435eac1c0871a8b1e802155f19862375",
+      "filename": "uosc_videotogether-1.0.0-1a4dc93.tar.gz",
+      "sha256": "464ada4b1ecd6c3467cb3be42e8f5a01c2fae674733f3d7fe4b3e80f1ee62b00",
+      "license": "MIT AND BSD-2-Clause"
     },
     "thumbfast": {
       "version": "0.0.0+20260628",

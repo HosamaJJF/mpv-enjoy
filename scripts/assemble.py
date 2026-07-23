@@ -27,7 +27,14 @@ from generate_sbom import build_sbom
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-REQUIRED_COMPONENTS = ("mpv", "uosc", "uosc_danmaku", "thumbfast", "yt_dlp_source")
+REQUIRED_COMPONENTS = (
+    "mpv",
+    "uosc",
+    "uosc_danmaku",
+    "uosc_videotogether",
+    "thumbfast",
+    "yt_dlp_source",
+)
 SUPPORTED_PLATFORMS = ("windows-x64", "macos-arm64", "macos-x64")
 MACOS_ARCHES = {
     "macos-arm64": {"macho": "arm64", "go": "arm64"},
@@ -161,6 +168,63 @@ def configure_danmaku(source: Path, config_dir: Path) -> None:
     write_text(main_path, main)
 
 
+def configure_videotogether(source: Path, config_dir: Path) -> None:
+    copy_file(
+        source / "scripts" / "uosc_videotogether" / "main.lua",
+        config_dir / "scripts" / "uosc_videotogether" / "main.lua",
+    )
+    config = (source / "script-opts" / "uosc_videotogether.conf").read_text(
+        encoding="utf-8"
+    )
+    # mpv-enjoy already reserves Ctrl+Shift+v for uosc/paste-to-open.
+    config = patch_assignment(config, "menu_key", "")
+    write_text(
+        config_dir / "script-opts" / "uosc_videotogether.conf",
+        config,
+    )
+
+
+def build_videotogether_agent(source: Path, config_dir: Path, platform: str) -> None:
+    go = shutil.which("go")
+    if go is None:
+        raise AssemblyError("Go 1.23 or newer is required to build uosc_videotogether")
+    if platform == "windows-x64":
+        goos, goarch, filename = (
+            "windows",
+            "amd64",
+            "uosc-videotogether-agent-windows.exe",
+        )
+    else:
+        goos, goarch, filename = (
+            "darwin",
+            MACOS_ARCHES[platform]["go"],
+            "uosc-videotogether-agent-darwin",
+        )
+    output = config_dir / "scripts" / "uosc_videotogether" / "bin" / filename
+    output.parent.mkdir(parents=True, exist_ok=True)
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "GOOS": goos,
+            "GOARCH": goarch,
+            "CGO_ENABLED": "0",
+            "GOCACHE": str(PROJECT_ROOT / ".cache" / "go-build"),
+            "GOMODCACHE": str(PROJECT_ROOT / ".cache" / "go-mod"),
+        }
+    )
+    command = [
+        go,
+        "build",
+        "-trimpath",
+        "-ldflags=-s -w -buildid=",
+        "-o",
+        str(output),
+        "./cmd/uosc-videotogether-agent",
+    ]
+    subprocess.run(command, cwd=str(source), env=environment, check=True)
+    output.chmod(output.stat().st_mode | 0o755)
+
+
 def configure_thumbfast(source: Path, config_dir: Path) -> None:
     copy_file(source / "thumbfast.lua", config_dir / "scripts" / "thumbfast.lua")
 
@@ -181,6 +245,12 @@ def copy_licenses_and_sources(
         "mpv-LGPL-2.1.txt": extracted["mpv"] / "LICENSE.LGPL",
         "uosc-LGPL-2.1.txt": extracted["uosc"] / "LICENSE.LGPL",
         "uosc_danmaku-MIT.txt": extracted["uosc_danmaku"] / "LICENSE",
+        "uosc_videotogether-MIT.txt": extracted["uosc_videotogether"] / "LICENSE",
+        "gorilla-websocket-BSD-2-Clause.txt": (
+            extracted["uosc_videotogether"]
+            / "LICENSES"
+            / "gorilla-websocket-BSD-2-Clause.txt"
+        ),
         "thumbfast-MPL-2.0.txt": extracted["thumbfast"] / "LICENSE",
         "yt-dlp-Unlicense.txt": extracted["yt_dlp_source"] / "LICENSE",
     }
@@ -202,6 +272,14 @@ def write_metadata(
     build_manifest: Optional[Path],
 ) -> None:
     copy_file(PROJECT_ROOT / "dependencies.lock.json", release_root / "dependencies.lock.json")
+    release_notes = (
+        PROJECT_ROOT
+        / "release-notes"
+        / ("v" + str(lock["project_version"]) + ".md")
+    )
+    if not release_notes.is_file():
+        raise AssemblyError("Missing release notes: {}".format(release_notes))
+    copy_file(release_notes, release_root / "RELEASE-NOTES.zh-CN.md")
     if build_manifest is not None:
         if not build_manifest.is_file():
             raise AssemblyError("Build manifest does not exist: {}".format(build_manifest))
@@ -233,6 +311,8 @@ def write_release_readme(release_root: Path, platform: str) -> None:
 {instructions}
 
 弹幕默认采用手动搜索：`Ctrl+d` 打开搜索，`j` 开关弹幕；uosc 控制栏也提供搜索、开关和设置按钮。
+VideoTogether 可通过 uosc 控制栏的“一起看”按钮创建或加入房间。
+本版本更新内容见 `RELEASE-NOTES.zh-CN.md`。
 
 依赖版本见 `dependencies.lock.json`，许可证见 `LICENSES`，
 对应上游源码归档位于 `sources`。
@@ -260,8 +340,9 @@ def update_info_plist(app: Path, project_version: str) -> None:
     plist["CFBundleIdentifier"] = "io.github.hosamajjf.mpv-enjoy"
     plist["CFBundleName"] = "mpv-enjoy"
     plist["CFBundleDisplayName"] = "mpv-enjoy"
-    plist["CFBundleShortVersionString"] = project_version.split("-")[0]
-    plist["CFBundleVersion"] = "1"
+    release_version = project_version.split("-")[0]
+    plist["CFBundleShortVersionString"] = release_version
+    plist["CFBundleVersion"] = release_version
     plist["LSMinimumSystemVersion"] = "14.0"
     with plist_path.open("wb") as handle:
         plistlib.dump(plist, handle, sort_keys=True)
@@ -395,6 +476,10 @@ def main(argv: Optional[List[str]] = None) -> int:
                 configure_uosc(extracted["uosc"], config_dir, args.platform)
                 build_uosc_ziggy(extracted["uosc"], config_dir, args.platform)
                 configure_danmaku(extracted["uosc_danmaku"], config_dir)
+                configure_videotogether(extracted["uosc_videotogether"], config_dir)
+                build_videotogether_agent(
+                    extracted["uosc_videotogether"], config_dir, args.platform
+                )
                 configure_thumbfast(extracted["thumbfast"], config_dir)
 
                 release_root = staging / "release"

@@ -8,6 +8,7 @@ on:
       - 'config/**'
       - 'scripts/**'
       - 'tests/**'
+      - 'release-notes/**'
       - 'dependencies.lock.json'
 
 permissions:
@@ -55,7 +56,7 @@ jobs:
         with:
           name: mpv-enjoy-windows-x64
           path: |
-            dist/mpv-enjoy-1.0.0-windows-x64.zip
+            dist/mpv-enjoy-1.1.0-windows-x64.zip
             dist/SHA256SUMS
           if-no-files-found: error
 
@@ -96,7 +97,7 @@ jobs:
         with:
           name: mpv-enjoy-${{ matrix.platform }}
           path: |
-            dist/mpv-enjoy-1.0.0-${{ matrix.platform }}.zip
-            dist/mpv-enjoy-1.0.0-${{ matrix.platform }}.dmg
+            dist/mpv-enjoy-1.1.0-${{ matrix.platform }}.zip
+            dist/mpv-enjoy-1.1.0-${{ matrix.platform }}.dmg
             dist/SHA256SUMS
           if-no-files-found: error
