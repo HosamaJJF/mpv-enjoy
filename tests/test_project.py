@@ -14,6 +14,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 
 from fetch_dependencies import DependencyError, load_lock, safe_extract_tar  # noqa: E402
 from generate_sbom import build_sbom  # noqa: E402
+from assemble import configure_videotogether  # noqa: E402
 from collect_windows_runtime import msys_virtual_path, parse_ldd_references  # noqa: E402
 
 
@@ -44,9 +45,14 @@ class DependencyLockTests(unittest.TestCase):
         self.assertEqual(components["mpv"]["version"], "0.41.0")
         self.assertEqual(components["uosc"]["version"], "5.12.0")
         self.assertEqual(components["uosc_danmaku"]["version"], "2.2.0")
+        self.assertEqual(components["uosc_videotogether"]["version"], "1.0.0")
         self.assertEqual(
             components["uosc_danmaku"]["commit"],
             "8fb2107d1e04ce1fd700496ca7d2e4a62182016a",
+        )
+        self.assertEqual(
+            components["uosc_videotogether"]["commit"],
+            "1a4dc93f435eac1c0871a8b1e802155f19862375",
         )
 
     def test_sbom_has_dependency_relationships(self):
@@ -56,6 +62,7 @@ class DependencyLockTests(unittest.TestCase):
         self.assertIn("mpv-enjoy", names)
         self.assertIn("uosc", names)
         self.assertIn("uosc_danmaku", names)
+        self.assertIn("uosc_videotogether", names)
         self.assertIn("yt-dlp-binary-macos-x64", names)
 
         project = next(
@@ -70,6 +77,7 @@ class DependencyLockTests(unittest.TestCase):
         self.assertIn("Copyright (c) 2026 mpv-enjoy contributors", license_text)
         self.assertIn("mpv-player/mpv", license_text)
         self.assertIn("Tony15246/uosc_danmaku", license_text)
+        self.assertIn("HosamaJJF/uosc_videotogether", license_text)
         self.assertFalse((PROJECT_ROOT / "THIRD_PARTY_NOTICES.md").exists())
 
 
@@ -129,14 +137,50 @@ class ConfigurationTests(unittest.TestCase):
         self.assertIn("vo=gpu-next", config)
         self.assertIn("hwdec=auto", config)
 
-    def test_uosc_controls_include_all_danmaku_entry_points(self):
+    def test_uosc_controls_match_integrated_layout(self):
         overrides = json.loads(
             (PROJECT_ROOT / "config" / "uosc-overrides.json").read_text(encoding="utf-8")
         )
         controls = overrides["common"]["controls"]
-        self.assertIn("button:danmaku", controls)
-        self.assertIn("show_danmaku@uosc_danmaku", controls)
-        self.assertIn("button:danmaku_menu", controls)
+        self.assertEqual(
+            controls,
+            "menu,gap,<video,audio>subtitles,<has_many_audio>audio,"
+            "<has_many_video>video,<has_many_edition>editions,"
+            "<stream>stream-quality,button:danmaku,"
+            "cycle:toggle_on:show_danmaku@uosc_danmaku:"
+            "on=toggle_on/off=toggle_off?弹幕开关,"
+            "button:danmaku_menu,button:videotogether,gap,space,"
+            "<video,audio>speed,space,shuffle,loop-playlist,loop-file,"
+            "gap,prev,items,next,gap,fullscreen",
+        )
+
+    def test_videotogether_config_avoids_existing_shortcut_conflict(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            output = root / "output"
+            plugin = source / "scripts" / "uosc_videotogether"
+            options = source / "script-opts"
+            plugin.mkdir(parents=True)
+            options.mkdir(parents=True)
+            (plugin / "main.lua").write_text("-- test\n", encoding="utf-8")
+            (options / "uosc_videotogether.conf").write_text(
+                "server=https://example.com\nmenu_key=Ctrl+Shift+v\n",
+                encoding="utf-8",
+            )
+
+            configure_videotogether(source, output)
+
+            config = (
+                output / "script-opts" / "uosc_videotogether.conf"
+            ).read_text(encoding="utf-8")
+            self.assertIn("menu_key=\n", config)
+            self.assertNotIn("menu_key=Ctrl+Shift+v", config)
+            self.assertTrue(
+                (
+                    output / "scripts" / "uosc_videotogether" / "main.lua"
+                ).is_file()
+            )
 
     def test_macos_architectures_have_matching_platform_config(self):
         overrides = json.loads(
@@ -167,6 +211,7 @@ class ConfigurationTests(unittest.TestCase):
         self.assertIn('--config-dir="$MPV_ENJOY_CONFIG_DIR"', launcher)
         self.assertIn("_NSGetExecutablePath", native_launcher)
         self.assertIn('child_argv[0] = "/bin/sh"', native_launcher)
+        self.assertIn("uosc_videotogether.conf", launcher)
         self.assertNotIn("spctl --master-disable", launcher)
         self.assertNotIn("xattr -dr", launcher)
 

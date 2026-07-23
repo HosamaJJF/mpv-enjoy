@@ -110,7 +110,8 @@ for MPV_ENJOY_BINARY in \
     "$MPV_ENJOY_APP/Contents/MacOS/mpv-bin" \
     "$MPV_ENJOY_APP/Contents/MacOS/mpv" \
     "$MPV_ENJOY_APP/Contents/MacOS/yt-dlp" \
-    "$MPV_ENJOY_APP/Contents/Resources/config-template/scripts/uosc/bin/ziggy-darwin"
+    "$MPV_ENJOY_APP/Contents/Resources/config-template/scripts/uosc/bin/ziggy-darwin" \
+    "$MPV_ENJOY_APP/Contents/Resources/config-template/scripts/uosc_videotogether/bin/uosc-videotogether-agent-darwin"
 do
     MPV_ENJOY_DESCRIPTION=$(/usr/bin/file "$MPV_ENJOY_BINARY")
     if [[ "$MPV_ENJOY_DESCRIPTION" != *"Mach-O 64-bit executable $MPV_ENJOY_MACHO_ARCH"* ]] || \
@@ -122,6 +123,8 @@ done
 
 /usr/bin/codesign --force --sign - --timestamp=none \
     "$MPV_ENJOY_APP/Contents/Resources/config-template/scripts/uosc/bin/ziggy-darwin"
+/usr/bin/codesign --force --sign - --timestamp=none \
+    "$MPV_ENJOY_APP/Contents/Resources/config-template/scripts/uosc_videotogether/bin/uosc-videotogether-agent-darwin"
 /usr/bin/codesign --force --deep --sign - --timestamp=none "$MPV_ENJOY_APP"
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$MPV_ENJOY_APP"
 

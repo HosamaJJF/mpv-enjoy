@@ -37,6 +37,7 @@ License，而是分别遵循其上游许可证：
 | mpv | [mpv-player/mpv](https://github.com/mpv-player/mpv) | GPL-2.0-or-later / LGPL-2.1-or-later 混合代码库 |
 | uosc | [tomasklaen/uosc](https://github.com/tomasklaen/uosc) | LGPL-2.1-only |
 | uosc_danmaku | [Tony15246/uosc_danmaku](https://github.com/Tony15246/uosc_danmaku) | MIT |
+| uosc_videotogether | [HosamaJJF/uosc_videotogether](https://github.com/HosamaJJF/uosc_videotogether) | MIT；内置 agent 使用 BSD-2-Clause 的 gorilla/websocket |
 | thumbfast | [po5/thumbfast](https://github.com/po5/thumbfast) | MPL-2.0 |
 | yt-dlp | [yt-dlp/yt-dlp](https://github.com/yt-dlp/yt-dlp) | Unlicense 及其二进制文件声明的第三方许可证 |
 

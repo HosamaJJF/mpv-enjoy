@@ -5,21 +5,28 @@
 mpv_PlayKit，制作了这套面向 Windows 和 macOS 的开箱即用 mpv 整合包。
 
 项目提供 Windows x64、macOS Apple Silicon 和 macOS Intel 三个独立版本，集成 mpv、完整
-[uosc](https://github.com/tomasklaen/uosc)、uosc_danmaku、thumbfast 与 yt-dlp。由于需要兼顾
-多个平台，未沿用 mpv_PlayKit 中的各类着色器整合；有需要时可自行添加适合设备和平台的
-着色器与配置。
+[uosc](https://github.com/tomasklaen/uosc)、uosc_danmaku、
+[uosc_videotogether](https://github.com/HosamaJJF/uosc_videotogether)、thumbfast 与
+yt-dlp。由于需要兼顾多个平台，未沿用 mpv_PlayKit 中的各类着色器整合；有需要时可自行
+添加适合设备和平台的着色器与配置。
 
 ## 修改配置
 
 Windows 版本的配置位于程序目录下的 `portable_config`。推荐把自定义 mpv 选项写入
-`portable_config/user.conf`；快捷键、uosc 和弹幕插件配置分别位于
-`portable_config/input.conf`、`portable_config/script-opts/uosc.conf` 和
-`portable_config/script-opts/uosc_danmaku.conf`。
+`portable_config/user.conf`；快捷键、uosc、弹幕和一起看插件配置分别位于
+`portable_config/input.conf`、`portable_config/script-opts/uosc.conf`、
+`portable_config/script-opts/uosc_danmaku.conf` 和
+`portable_config/script-opts/uosc_videotogether.conf`。
 
 macOS 版本首次启动后会在 `~/Library/Application Support/mpv-enjoy/config` 初始化配置。
-推荐把自定义 mpv 选项写入其中的 `user.conf`；快捷键、uosc 和弹幕插件配置分别位于同一
-目录下的 `input.conf`、`script-opts/uosc.conf` 和 `script-opts/uosc_danmaku.conf`。Apple
-Silicon 与 Intel 版本使用相同的配置目录。
+推荐把自定义 mpv 选项写入其中的 `user.conf`；快捷键、uosc、弹幕和一起看插件配置分别
+位于同一目录下的 `input.conf`、`script-opts/uosc.conf`、
+`script-opts/uosc_danmaku.conf` 和
+`script-opts/uosc_videotogether.conf`。Apple Silicon 与 Intel 版本使用相同的配置目录。
+
+uosc 控制栏提供 VideoTogether 一起看按钮。该功能只同步播放状态，不会传输本地媒体
+文件；房间成员需要各自准备可播放的相同内容。如需额外设置快捷键，可在
+`uosc_videotogether.conf` 中填写 `menu_key`。
 
 ## 构建
 

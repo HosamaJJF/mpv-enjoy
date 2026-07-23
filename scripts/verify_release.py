@@ -55,8 +55,10 @@ def verify_config(config: Path, platform: str) -> Dict[str, str]:
         config / "profiles.conf",
         config / "script-opts" / "uosc.conf",
         config / "script-opts" / "uosc_danmaku.conf",
+        config / "script-opts" / "uosc_videotogether.conf",
         config / "scripts" / "uosc" / "main.lua",
         config / "scripts" / "uosc_danmaku" / "main.lua",
+        config / "scripts" / "uosc_videotogether" / "main.lua",
         config / "scripts" / "thumbfast.lua",
         config / "scripts" / "mpv_enjoy_danmaku_bridge.lua",
     ]
@@ -85,21 +87,54 @@ def verify_config(config: Path, platform: str) -> Dict[str, str]:
     require("script-binding uosc/update" not in uosc_main, "uosc updater is still in its menu")
     require("button:danmaku" in uosc_conf, "uosc danmaku search button is absent")
     require("button:danmaku_menu" in uosc_conf, "uosc danmaku menu button is absent")
+    require("button:videotogether" in uosc_conf, "uosc VideoTogether button is absent")
     require(len(uosc_conf) > 10000, "uosc.conf does not look like the complete upstream config")
 
     if platform == "windows-x64":
         ziggy = config / "scripts" / "uosc" / "bin" / "ziggy-windows.exe"
+        videotogether_agent = (
+            config
+            / "scripts"
+            / "uosc_videotogether"
+            / "bin"
+            / "uosc-videotogether-agent-windows.exe"
+        )
         expected = "x86-64"
     else:
         ziggy = config / "scripts" / "uosc" / "bin" / "ziggy-darwin"
+        videotogether_agent = (
+            config
+            / "scripts"
+            / "uosc_videotogether"
+            / "bin"
+            / "uosc-videotogether-agent-darwin"
+        )
         expected = MACOS_ARCHES[platform]
     require(ziggy.is_file(), "Missing platform ziggy binary")
-    description = file_description(ziggy)
-    if "unavailable" not in description:
-        require(expected in description, "Wrong ziggy architecture: {}".format(description))
+    require(videotogether_agent.is_file(), "Missing VideoTogether agent binary")
+    ziggy_description = file_description(ziggy)
+    agent_description = file_description(videotogether_agent)
+    if "unavailable" not in ziggy_description:
+        require(
+            expected in ziggy_description,
+            "Wrong ziggy architecture: {}".format(ziggy_description),
+        )
         if platform != "windows-x64":
-            require("universal binary" not in description, "ziggy must not be Universal")
-    return {"ziggy": description}
+            require(
+                "universal binary" not in ziggy_description,
+                "ziggy must not be Universal",
+            )
+    if "unavailable" not in agent_description:
+        require(
+            expected in agent_description,
+            "Wrong VideoTogether agent architecture: {}".format(agent_description),
+        )
+        if platform != "windows-x64":
+            require(
+                "universal binary" not in agent_description,
+                "VideoTogether agent must not be Universal",
+            )
+    return {"ziggy": ziggy_description, "videotogether_agent": agent_description}
 
 
 def main(argv: Optional[List[str]] = None) -> int:
