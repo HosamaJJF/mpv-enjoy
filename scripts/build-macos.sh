@@ -26,7 +26,7 @@ MPV_ENJOY_PROJECT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 MPV_ENJOY_BUILD_DIR="$MPV_ENJOY_PROJECT_DIR/build"
 MPV_ENJOY_SOURCE_DIR="$MPV_ENJOY_BUILD_DIR/sources/mpv"
 MPV_ENJOY_MPV_BUILD_DIR="$MPV_ENJOY_BUILD_DIR/mpv-$MPV_ENJOY_PLATFORM"
-MPV_ENJOY_RELEASE_DIR="$MPV_ENJOY_BUILD_DIR/release/mpv-enjoy-1.1.1-$MPV_ENJOY_PLATFORM"
+MPV_ENJOY_RELEASE_DIR="$MPV_ENJOY_BUILD_DIR/release/mpv-enjoy-1.1.2-$MPV_ENJOY_PLATFORM"
 MPV_ENJOY_DIST_DIR="$MPV_ENJOY_PROJECT_DIR/dist"
 MPV_ENJOY_MANIFEST="$MPV_ENJOY_BUILD_DIR/$MPV_ENJOY_PLATFORM-build-dependencies.txt"
 MPV_ENJOY_APP="$MPV_ENJOY_RELEASE_DIR/mpv-enjoy.app"
@@ -142,8 +142,8 @@ python3 scripts/verify_release.py \
     -srcfolder "$MPV_ENJOY_RELEASE_DIR" \
     -ov \
     -format UDZO \
-    "$MPV_ENJOY_DIST_DIR/mpv-enjoy-1.1.1-$MPV_ENJOY_PLATFORM.dmg"
-/usr/bin/hdiutil verify "$MPV_ENJOY_DIST_DIR/mpv-enjoy-1.1.1-$MPV_ENJOY_PLATFORM.dmg"
+    "$MPV_ENJOY_DIST_DIR/mpv-enjoy-1.1.2-$MPV_ENJOY_PLATFORM.dmg"
+/usr/bin/hdiutil verify "$MPV_ENJOY_DIST_DIR/mpv-enjoy-1.1.2-$MPV_ENJOY_PLATFORM.dmg"
 python3 scripts/write_checksums.py "$MPV_ENJOY_DIST_DIR"
 
-echo "macOS package: $MPV_ENJOY_DIST_DIR/mpv-enjoy-1.1.1-$MPV_ENJOY_PLATFORM.dmg"
+echo "macOS package: $MPV_ENJOY_DIST_DIR/mpv-enjoy-1.1.2-$MPV_ENJOY_PLATFORM.dmg"

@@ -41,7 +41,7 @@ class DependencyLockTests(unittest.TestCase):
             self.assertNotIn("/main/", spec["url"])
 
     def test_target_architectures_are_exact(self):
-        self.assertEqual(self.lock["project_version"], "1.1.1")
+        self.assertEqual(self.lock["project_version"], "1.1.2")
         self.assertEqual(
             set(self.lock["platform_assets"]),
             {"windows-x64", "macos-arm64", "macos-x64"},
@@ -98,7 +98,9 @@ class DependencyLockTests(unittest.TestCase):
             self.assertTrue(notes.is_file())
             self.assertEqual(
                 notes.read_text(encoding="utf-8").strip(),
-                "升级uosc_videotogether至1.0.1",
+                "通过临时的方式修复了来自上游uosc_danmaku的bug，详情见"
+                "“[Tony15246/uosc_danmaku#396]"
+                "(https://github.com/Tony15246/uosc_danmaku/pull/396)”",
             )
             checksums = (release / "SHA256SUMS").read_text(encoding="utf-8")
             self.assertIn("RELEASE-NOTES.zh-CN.md", checksums)
@@ -283,20 +285,25 @@ class ConfigurationTests(unittest.TestCase):
         for path in paths:
             with self.subTest(path=path):
                 text = path.read_text(encoding="utf-8")
-                self.assertIn("mpv-enjoy-1.1.1", text)
-                self.assertNotIn("mpv-enjoy-1.1.0", text)
+                self.assertIn("mpv-enjoy-1.1.2", text)
+                self.assertNotIn("mpv-enjoy-1.1.1", text)
 
-    def test_release_notes_match_1_1_1_description(self):
+    def test_release_notes_match_1_1_2_description(self):
         notes = (
-            PROJECT_ROOT / "release-notes" / "v1.1.1.md"
+            PROJECT_ROOT / "release-notes" / "v1.1.2.md"
         ).read_text(encoding="utf-8")
-        self.assertEqual(notes.strip(), "升级uosc_videotogether至1.0.1")
+        self.assertEqual(
+            notes.strip(),
+            "通过临时的方式修复了来自上游uosc_danmaku的bug，详情见"
+            "“[Tony15246/uosc_danmaku#396]"
+            "(https://github.com/Tony15246/uosc_danmaku/pull/396)”",
+        )
 
     def test_readme_lists_videotogether_with_integrated_components(self):
         readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
         introduction = readme.split("## 修改配置", 1)[0]
         self.assertIn("uosc_videotogether", introduction)
-        self.assertNotIn("## 1.1.1 更新", readme)
+        self.assertNotIn("## 1.1.2 更新", readme)
 
     def test_macos_launcher_uses_app_support_and_does_not_disable_gatekeeper(self):
         launcher = (PROJECT_ROOT / "scripts" / "macos-launcher.sh").read_text(
@@ -321,12 +328,12 @@ class ConfigurationTests(unittest.TestCase):
             with plist_path.open("wb") as handle:
                 plistlib.dump({"CFBundleExecutable": "mpv"}, handle)
 
-            update_info_plist(app, "1.1.1")
+            update_info_plist(app, "1.1.2")
 
             with plist_path.open("rb") as handle:
                 plist = plistlib.load(handle)
-            self.assertEqual(plist["CFBundleShortVersionString"], "1.1.1")
-            self.assertEqual(plist["CFBundleVersion"], "1.1.1")
+            self.assertEqual(plist["CFBundleShortVersionString"], "1.1.2")
+            self.assertEqual(plist["CFBundleVersion"], "1.1.2")
 
     def test_danmaku_bridge_reannounces_uosc_and_buttons(self):
         bridge = (
@@ -352,9 +359,9 @@ class ConfigurationTests(unittest.TestCase):
         workflow = (
             PROJECT_ROOT / ".github" / "workflows" / "build.yml"
         ).read_text(encoding="utf-8")
-        self.assertIn("mpv-enjoy-1.1.1-$MPV_ENJOY_PLATFORM.dmg", script)
-        self.assertNotIn("mpv-enjoy-1.1.1-$MPV_ENJOY_PLATFORM.zip", script)
-        self.assertNotIn("mpv-enjoy-1.1.1-${{ matrix.platform }}.zip", workflow)
+        self.assertIn("mpv-enjoy-1.1.2-$MPV_ENJOY_PLATFORM.dmg", script)
+        self.assertNotIn("mpv-enjoy-1.1.2-$MPV_ENJOY_PLATFORM.zip", script)
+        self.assertNotIn("mpv-enjoy-1.1.2-${{ matrix.platform }}.zip", workflow)
         self.assertIn('gh run download "$GITHUB_RUN_ID"', workflow)
         self.assertIn('gh release upload "$GITHUB_REF_NAME"', workflow)
 
