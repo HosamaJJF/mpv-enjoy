@@ -44,7 +44,7 @@ uosc 控制栏提供 VideoTogether 一起看按钮。该功能只同步播放状
 ```
 
 Windows 脚本从源码编译 mpv、收集运行库并生成便携 ZIP。macOS 脚本从源码编译对应架构的
-应用，生成 ZIP 和 DMG，并使用 ad-hoc 身份签名。没有 Developer ID 公证时，首次启动可能
+应用，仅生成 DMG，并使用 ad-hoc 身份签名。没有 Developer ID 公证时，首次启动可能
 需要在 Finder 中右键选择“打开”，或前往“系统设置 → 隐私与安全性 → 仍要打开”。
 
 ## 本地校验
@@ -54,13 +54,13 @@ python3 -m unittest discover -s tests -v
 
 python3 scripts/verify_release.py \
   --platform windows-x64 \
-  --release build/release/mpv-enjoy-1.1.0-windows-x64
+  --release build/release/mpv-enjoy-1.1.1-windows-x64
 
 python3 scripts/verify_release.py \
   --platform macos-arm64 \
-  --release build/release/mpv-enjoy-1.1.0-macos-arm64
+  --release build/release/mpv-enjoy-1.1.1-macos-arm64
 
 python3 scripts/verify_release.py \
   --platform macos-x64 \
-  --release build/release/mpv-enjoy-1.1.0-macos-x64
+  --release build/release/mpv-enjoy-1.1.1-macos-x64
 ```
