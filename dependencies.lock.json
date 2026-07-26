@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-07-23T00:00:00Z",
-  "project_version": "1.1.0",
+  "generated_at": "2026-07-26T00:00:00Z",
+  "project_version": "1.1.1",
   "components": {
     "mpv": {
       "version": "0.41.0",
@@ -34,13 +34,13 @@
       "license": "MIT"
     },
     "uosc_videotogether": {
-      "version": "1.0.0",
-      "ref": "v1.0.0",
-      "commit": "1a4dc93f435eac1c0871a8b1e802155f19862375",
+      "version": "1.0.1",
+      "ref": "v1.0.1",
+      "commit": "deb15344e5b1a01d22d3360aab885c1175d2d64c",
       "repository": "https://github.com/HosamaJJF/uosc_videotogether",
-      "url": "https://codeload.github.com/HosamaJJF/uosc_videotogether/tar.gz/1a4dc93f435eac1c0871a8b1e802155f19862375",
-      "filename": "uosc_videotogether-1.0.0-1a4dc93.tar.gz",
-      "sha256": "464ada4b1ecd6c3467cb3be42e8f5a01c2fae674733f3d7fe4b3e80f1ee62b00",
+      "url": "https://codeload.github.com/HosamaJJF/uosc_videotogether/tar.gz/deb15344e5b1a01d22d3360aab885c1175d2d64c",
+      "filename": "uosc_videotogether-1.0.1-deb1534.tar.gz",
+      "sha256": "a19186ae2618a44f7a2ba7678aeb3752958d14baf64575b46a224f369b70c45f",
       "license": "MIT AND BSD-2-Clause"
     },
     "thumbfast": {

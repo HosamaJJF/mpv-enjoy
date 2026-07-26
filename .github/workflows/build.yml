@@ -3,6 +3,10 @@ name: Build
 on:
   workflow_dispatch:
   push:
+    branches:
+      - '**'
+    tags:
+      - 'v*'
     paths:
       - '.github/workflows/build.yml'
       - 'config/**'
@@ -56,7 +60,7 @@ jobs:
         with:
           name: mpv-enjoy-windows-x64
           path: |
-            dist/mpv-enjoy-1.1.0-windows-x64.zip
+            dist/mpv-enjoy-1.1.1-windows-x64.zip
             dist/SHA256SUMS
           if-no-files-found: error
 
@@ -97,7 +101,73 @@ jobs:
         with:
           name: mpv-enjoy-${{ matrix.platform }}
           path: |
-            dist/mpv-enjoy-1.1.0-${{ matrix.platform }}.zip
-            dist/mpv-enjoy-1.1.0-${{ matrix.platform }}.dmg
+            dist/mpv-enjoy-1.1.1-${{ matrix.platform }}.dmg
             dist/SHA256SUMS
           if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - windows-x64
+      - macos
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Download CI artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p artifacts/windows-x64 artifacts/macos-arm64 artifacts/macos-x64
+          gh run download "$GITHUB_RUN_ID" \
+            --name mpv-enjoy-windows-x64 \
+            --dir artifacts/windows-x64
+          gh run download "$GITHUB_RUN_ID" \
+            --name mpv-enjoy-macos-arm64 \
+            --dir artifacts/macos-arm64
+          gh run download "$GITHUB_RUN_ID" \
+            --name mpv-enjoy-macos-x64 \
+            --dir artifacts/macos-x64
+      - name: Verify and collect release assets
+        run: |
+          expected_tag="v$(jq -r '.project_version' dependencies.lock.json)"
+          if [[ "$GITHUB_REF_NAME" != "$expected_tag" ]]; then
+            echo "Tag $GITHUB_REF_NAME does not match project version $expected_tag" >&2
+            exit 1
+          fi
+          for platform in windows-x64 macos-arm64 macos-x64
+          do
+            (
+              cd "artifacts/$platform"
+              sha256sum --check SHA256SUMS
+            )
+          done
+          mkdir release-assets
+          cp artifacts/windows-x64/mpv-enjoy-1.1.1-windows-x64.zip release-assets/
+          cp artifacts/macos-arm64/mpv-enjoy-1.1.1-macos-arm64.dmg release-assets/
+          cp artifacts/macos-x64/mpv-enjoy-1.1.1-macos-x64.dmg release-assets/
+          (
+            cd release-assets
+            sha256sum mpv-enjoy-* > SHA256SUMS
+          )
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release_title="mpv-enjoy ${GITHUB_REF_NAME#v}"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" \
+              --draft \
+              --title "$release_title" \
+              --notes-file "release-notes/$GITHUB_REF_NAME.md"
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --verify-tag \
+              --draft \
+              --title "$release_title" \
+              --notes-file "release-notes/$GITHUB_REF_NAME.md"
+          fi
+          gh release upload "$GITHUB_REF_NAME" release-assets/* --clobber
+          gh release edit "$GITHUB_REF_NAME" --draft=false
