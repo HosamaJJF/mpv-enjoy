@@ -58,6 +58,7 @@ def verify_config(config: Path, platform: str) -> Dict[str, str]:
         config / "script-opts" / "uosc_videotogether.conf",
         config / "scripts" / "uosc" / "main.lua",
         config / "scripts" / "uosc_danmaku" / "main.lua",
+        config / "scripts" / "uosc_danmaku" / "apis" / "dandanplay.lua",
         config / "scripts" / "uosc_videotogether" / "main.lua",
         config / "scripts" / "thumbfast.lua",
         config / "scripts" / "mpv_enjoy_danmaku_bridge.lua",
@@ -80,10 +81,21 @@ def verify_config(config: Path, platform: str) -> Dict[str, str]:
     danmaku_main = (config / "scripts" / "uosc_danmaku" / "main.lua").read_text(
         encoding="utf-8"
     )
+    danmaku_api = (
+        config / "scripts" / "uosc_danmaku" / "apis" / "dandanplay.lua"
+    ).read_text(encoding="utf-8")
     uosc_conf = (config / "script-opts" / "uosc.conf").read_text(encoding="utf-8")
     require("local uosc_version = '5.12.0'" in uosc_main, "Unexpected uosc version")
     require('VERSION = "2.2.0"' in danmaku_main, "Unexpected uosc_danmaku version")
     require("require(\"modules/update\")" not in danmaku_main, "Danmaku updater still loads")
+    require(
+        "file_info.size >= 16 * 1024 * 1024" in danmaku_api,
+        "Danmaku exact-size hash patch is absent",
+    )
+    require(
+        "file_info.size > 16 * 1024 * 1024" not in danmaku_api,
+        "Danmaku exact-size hash bug is still present",
+    )
     require("script-binding uosc/update" not in uosc_main, "uosc updater is still in its menu")
     require("button:danmaku" in uosc_conf, "uosc danmaku search button is absent")
     require("button:danmaku_menu" in uosc_conf, "uosc danmaku menu button is absent")

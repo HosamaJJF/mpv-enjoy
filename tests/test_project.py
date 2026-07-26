@@ -16,6 +16,8 @@ sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 from fetch_dependencies import DependencyError, load_lock, safe_extract_tar  # noqa: E402
 from generate_sbom import build_sbom  # noqa: E402
 from assemble import (  # noqa: E402
+    AssemblyError,
+    configure_danmaku,
     configure_videotogether,
     update_info_plist,
     write_metadata,
@@ -148,6 +150,53 @@ class WindowsRuntimeTests(unittest.TestCase):
 
 
 class ConfigurationTests(unittest.TestCase):
+    def _write_danmaku_source(self, source, hash_operator):
+        (source / "apis").mkdir(parents=True)
+        (source / "main.lua").write_text(
+            'VERSION = "2.2.0"\n'
+            'require("modules/update")\n'
+            'mp.register_script_message("check-update", check_for_update)\n',
+            encoding="utf-8",
+        )
+        (source / "apis" / "dandanplay.lua").write_text(
+            "local file_info = utils.file_info(file_path)\n"
+            "    if file_info and file_info.size {} 16 * 1024 * 1024 then\n".format(
+                hash_operator
+            ),
+            encoding="utf-8",
+        )
+
+    def test_danmaku_exact_size_hash_fix_is_applied(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            output = root / "output"
+            self._write_danmaku_source(source, ">")
+
+            configure_danmaku(source, output)
+
+            dandanplay = (
+                output
+                / "scripts"
+                / "uosc_danmaku"
+                / "apis"
+                / "dandanplay.lua"
+            ).read_text(encoding="utf-8")
+            self.assertIn("file_info.size >= 16 * 1024 * 1024", dandanplay)
+            self.assertNotIn("file_info.size > 16 * 1024 * 1024", dandanplay)
+
+    def test_danmaku_hash_fix_fails_when_upstream_no_longer_matches(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            output = root / "output"
+            self._write_danmaku_source(source, ">=")
+
+            with self.assertRaisesRegex(
+                AssemblyError, "hash threshold patch no longer matches upstream"
+            ):
+                configure_danmaku(source, output)
+
     def test_common_config_has_no_platform_specific_acceleration_stack(self):
         config = (PROJECT_ROOT / "config" / "common" / "mpv.conf").read_text(
             encoding="utf-8"

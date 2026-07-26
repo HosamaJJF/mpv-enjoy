@@ -151,6 +151,25 @@ def build_uosc_ziggy(uosc_source: Path, config_dir: Path, platform: str) -> None
 def configure_danmaku(source: Path, config_dir: Path) -> None:
     target = config_dir / "scripts" / "uosc_danmaku"
     shutil.copytree(str(source), str(target), ignore=shutil.ignore_patterns(".git*"))
+
+    dandanplay_path = target / "apis" / "dandanplay.lua"
+    dandanplay = dandanplay_path.read_text(encoding="utf-8")
+    # Temporary backport of https://github.com/Tony15246/uosc_danmaku/pull/396.
+    old_hash_threshold = (
+        "    if file_info and file_info.size > 16 * 1024 * 1024 then\n"
+    )
+    fixed_hash_threshold = (
+        "    if file_info and file_info.size >= 16 * 1024 * 1024 then\n"
+    )
+    if dandanplay.count(old_hash_threshold) != 1:
+        raise AssemblyError(
+            "uosc_danmaku hash threshold patch no longer matches upstream"
+        )
+    dandanplay = dandanplay.replace(
+        old_hash_threshold, fixed_hash_threshold, 1
+    )
+    write_text(dandanplay_path, dandanplay)
+
     main_path = target / "main.lua"
     main = main_path.read_text(encoding="utf-8")
     if 'VERSION = "2.2.0"' not in main:
