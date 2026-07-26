@@ -16,6 +16,8 @@ sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
 from fetch_dependencies import DependencyError, load_lock, safe_extract_tar  # noqa: E402
 from generate_sbom import build_sbom  # noqa: E402
 from assemble import (  # noqa: E402
+    AssemblyError,
+    configure_danmaku,
     configure_videotogether,
     update_info_plist,
     write_metadata,
@@ -39,7 +41,7 @@ class DependencyLockTests(unittest.TestCase):
             self.assertNotIn("/main/", spec["url"])
 
     def test_target_architectures_are_exact(self):
-        self.assertEqual(self.lock["project_version"], "1.1.1")
+        self.assertEqual(self.lock["project_version"], "1.1.2")
         self.assertEqual(
             set(self.lock["platform_assets"]),
             {"windows-x64", "macos-arm64", "macos-x64"},
@@ -96,7 +98,9 @@ class DependencyLockTests(unittest.TestCase):
             self.assertTrue(notes.is_file())
             self.assertEqual(
                 notes.read_text(encoding="utf-8").strip(),
-                "升级uosc_videotogether至1.0.1",
+                "通过临时的方式修复了来自上游uosc_danmaku的bug，详情见"
+                "“[Tony15246/uosc_danmaku#396]"
+                "(https://github.com/Tony15246/uosc_danmaku/pull/396)”",
             )
             checksums = (release / "SHA256SUMS").read_text(encoding="utf-8")
             self.assertIn("RELEASE-NOTES.zh-CN.md", checksums)
@@ -148,6 +152,53 @@ class WindowsRuntimeTests(unittest.TestCase):
 
 
 class ConfigurationTests(unittest.TestCase):
+    def _write_danmaku_source(self, source, hash_operator):
+        (source / "apis").mkdir(parents=True)
+        (source / "main.lua").write_text(
+            'VERSION = "2.2.0"\n'
+            'require("modules/update")\n'
+            'mp.register_script_message("check-update", check_for_update)\n',
+            encoding="utf-8",
+        )
+        (source / "apis" / "dandanplay.lua").write_text(
+            "local file_info = utils.file_info(file_path)\n"
+            "    if file_info and file_info.size {} 16 * 1024 * 1024 then\n".format(
+                hash_operator
+            ),
+            encoding="utf-8",
+        )
+
+    def test_danmaku_exact_size_hash_fix_is_applied(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            output = root / "output"
+            self._write_danmaku_source(source, ">")
+
+            configure_danmaku(source, output)
+
+            dandanplay = (
+                output
+                / "scripts"
+                / "uosc_danmaku"
+                / "apis"
+                / "dandanplay.lua"
+            ).read_text(encoding="utf-8")
+            self.assertIn("file_info.size >= 16 * 1024 * 1024", dandanplay)
+            self.assertNotIn("file_info.size > 16 * 1024 * 1024", dandanplay)
+
+    def test_danmaku_hash_fix_fails_when_upstream_no_longer_matches(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            output = root / "output"
+            self._write_danmaku_source(source, ">=")
+
+            with self.assertRaisesRegex(
+                AssemblyError, "hash threshold patch no longer matches upstream"
+            ):
+                configure_danmaku(source, output)
+
     def test_common_config_has_no_platform_specific_acceleration_stack(self):
         config = (PROJECT_ROOT / "config" / "common" / "mpv.conf").read_text(
             encoding="utf-8"
@@ -234,20 +285,25 @@ class ConfigurationTests(unittest.TestCase):
         for path in paths:
             with self.subTest(path=path):
                 text = path.read_text(encoding="utf-8")
-                self.assertIn("mpv-enjoy-1.1.1", text)
-                self.assertNotIn("mpv-enjoy-1.1.0", text)
+                self.assertIn("mpv-enjoy-1.1.2", text)
+                self.assertNotIn("mpv-enjoy-1.1.1", text)
 
-    def test_release_notes_match_1_1_1_description(self):
+    def test_release_notes_match_1_1_2_description(self):
         notes = (
-            PROJECT_ROOT / "release-notes" / "v1.1.1.md"
+            PROJECT_ROOT / "release-notes" / "v1.1.2.md"
         ).read_text(encoding="utf-8")
-        self.assertEqual(notes.strip(), "升级uosc_videotogether至1.0.1")
+        self.assertEqual(
+            notes.strip(),
+            "通过临时的方式修复了来自上游uosc_danmaku的bug，详情见"
+            "“[Tony15246/uosc_danmaku#396]"
+            "(https://github.com/Tony15246/uosc_danmaku/pull/396)”",
+        )
 
     def test_readme_lists_videotogether_with_integrated_components(self):
         readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
         introduction = readme.split("## 修改配置", 1)[0]
         self.assertIn("uosc_videotogether", introduction)
-        self.assertNotIn("## 1.1.1 更新", readme)
+        self.assertNotIn("## 1.1.2 更新", readme)
 
     def test_macos_launcher_uses_app_support_and_does_not_disable_gatekeeper(self):
         launcher = (PROJECT_ROOT / "scripts" / "macos-launcher.sh").read_text(
@@ -272,12 +328,12 @@ class ConfigurationTests(unittest.TestCase):
             with plist_path.open("wb") as handle:
                 plistlib.dump({"CFBundleExecutable": "mpv"}, handle)
 
-            update_info_plist(app, "1.1.1")
+            update_info_plist(app, "1.1.2")
 
             with plist_path.open("rb") as handle:
                 plist = plistlib.load(handle)
-            self.assertEqual(plist["CFBundleShortVersionString"], "1.1.1")
-            self.assertEqual(plist["CFBundleVersion"], "1.1.1")
+            self.assertEqual(plist["CFBundleShortVersionString"], "1.1.2")
+            self.assertEqual(plist["CFBundleVersion"], "1.1.2")
 
     def test_danmaku_bridge_reannounces_uosc_and_buttons(self):
         bridge = (
@@ -303,9 +359,9 @@ class ConfigurationTests(unittest.TestCase):
         workflow = (
             PROJECT_ROOT / ".github" / "workflows" / "build.yml"
         ).read_text(encoding="utf-8")
-        self.assertIn("mpv-enjoy-1.1.1-$MPV_ENJOY_PLATFORM.dmg", script)
-        self.assertNotIn("mpv-enjoy-1.1.1-$MPV_ENJOY_PLATFORM.zip", script)
-        self.assertNotIn("mpv-enjoy-1.1.1-${{ matrix.platform }}.zip", workflow)
+        self.assertIn("mpv-enjoy-1.1.2-$MPV_ENJOY_PLATFORM.dmg", script)
+        self.assertNotIn("mpv-enjoy-1.1.2-$MPV_ENJOY_PLATFORM.zip", script)
+        self.assertNotIn("mpv-enjoy-1.1.2-${{ matrix.platform }}.zip", workflow)
         self.assertIn('gh run download "$GITHUB_RUN_ID"', workflow)
         self.assertIn('gh release upload "$GITHUB_REF_NAME"', workflow)
 
