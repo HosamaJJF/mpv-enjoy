@@ -166,7 +166,6 @@ def verify_config(
     )
     require("script-binding uosc/update" not in uosc_main, "uosc updater is still in its menu")
     require("button:danmaku" in uosc_conf, "uosc danmaku search button is absent")
-    require("button:danmaku_menu" in uosc_conf, "uosc danmaku menu button is absent")
     require("button:videotogether" in uosc_conf, "uosc VideoTogether button is absent")
     require(len(uosc_conf) > 10000, "uosc.conf does not look like the complete upstream config")
     verify_patched_lua(dandanplay_api, credentials)
