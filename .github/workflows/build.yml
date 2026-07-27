@@ -21,6 +21,7 @@ permissions:
 jobs:
   windows-x64:
     runs-on: windows-2025
+    environment: release-credentials
     defaults:
       run:
         shell: msys2 {0}
@@ -55,17 +56,21 @@ jobs:
       - name: Unit tests
         run: python3 -m unittest discover -s tests -v
       - name: Build and package
+        env:
+          MPV_ENJOY_DANDANPLAY_APP_ID_AES_B64: ${{ secrets.MPV_ENJOY_DANDANPLAY_APP_ID_AES_B64 }}
+          MPV_ENJOY_DANDANPLAY_APP_SECRET_AES_B64: ${{ secrets.MPV_ENJOY_DANDANPLAY_APP_SECRET_AES_B64 }}
         run: bash scripts/build-windows-msys2.sh
       - uses: actions/upload-artifact@v7
         with:
           name: mpv-enjoy-windows-x64
           path: |
-            dist/mpv-enjoy-1.1.2-windows-x64.zip
+            dist/mpv-enjoy-1.1.3-windows-x64.zip
             dist/SHA256SUMS
           if-no-files-found: error
 
   macos:
     name: ${{ matrix.platform }}
+    environment: release-credentials
     strategy:
       fail-fast: false
       matrix:
@@ -96,12 +101,15 @@ jobs:
       - name: Unit tests
         run: python3 -m unittest discover -s tests -v
       - name: Build, ad-hoc sign and package
+        env:
+          MPV_ENJOY_DANDANPLAY_APP_ID_AES_B64: ${{ secrets.MPV_ENJOY_DANDANPLAY_APP_ID_AES_B64 }}
+          MPV_ENJOY_DANDANPLAY_APP_SECRET_AES_B64: ${{ secrets.MPV_ENJOY_DANDANPLAY_APP_SECRET_AES_B64 }}
         run: bash scripts/build-macos.sh ${{ matrix.platform }}
       - uses: actions/upload-artifact@v7
         with:
           name: mpv-enjoy-${{ matrix.platform }}
           path: |
-            dist/mpv-enjoy-1.1.2-${{ matrix.platform }}.dmg
+            dist/mpv-enjoy-1.1.3-${{ matrix.platform }}.dmg
             dist/SHA256SUMS
           if-no-files-found: error
 
@@ -145,9 +153,9 @@ jobs:
             )
           done
           mkdir release-assets
-          cp artifacts/windows-x64/mpv-enjoy-1.1.2-windows-x64.zip release-assets/
-          cp artifacts/macos-arm64/mpv-enjoy-1.1.2-macos-arm64.dmg release-assets/
-          cp artifacts/macos-x64/mpv-enjoy-1.1.2-macos-x64.dmg release-assets/
+          cp artifacts/windows-x64/mpv-enjoy-1.1.3-windows-x64.zip release-assets/
+          cp artifacts/macos-arm64/mpv-enjoy-1.1.3-macos-arm64.dmg release-assets/
+          cp artifacts/macos-x64/mpv-enjoy-1.1.3-macos-x64.dmg release-assets/
           (
             cd release-assets
             sha256sum mpv-enjoy-* > SHA256SUMS
