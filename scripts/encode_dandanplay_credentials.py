@@ -13,11 +13,12 @@ from dandanplay_credentials import (
     APP_ID_ENV,
     APP_SECRET_ENV,
     DandanplayCredentials,
+    PINNED_UPSTREAM_RUNTIME_AES_KEY,
     credential_fingerprint,
 )
 
 
-AES_KEY = bytes(range(32))
+AES_KEY = PINNED_UPSTREAM_RUNTIME_AES_KEY
 AES_BLOCK_SIZE = 16
 
 

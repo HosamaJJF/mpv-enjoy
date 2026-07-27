@@ -43,7 +43,9 @@ uosc_danmaku 上游实现一致，仅用于避免在仓库和构建日志中直�
 python3 scripts/encode_dandanplay_credentials.py
 ```
 
-脚本不会通过命令行传递明文。把输出的前两个值分别保存为 GitHub
+脚本不会通过命令行传递明文，并会复现锁定版 uosc_danmaku 的实际运行时密钥行为；
+不要根据上游 `main.lua` 中的表面密钥手工生成密文。更新本脚本后应重新生成密文，不能
+沿用旧版脚本的输出。把输出的前两个值分别保存为 GitHub
 `release-credentials` Environment 中的以下 secrets：
 
 ```text

@@ -10,6 +10,12 @@ from typing import Mapping, NamedTuple
 APP_ID_ENV = "MPV_ENJOY_DANDANPLAY_APP_ID_AES_B64"
 APP_SECRET_ENV = "MPV_ENJOY_DANDANPLAY_APP_SECRET_AES_B64"
 
+# The pinned uosc_danmaku 2.2.0 source converts the literal 00..1f key with a
+# descending in-place table shift. Each earlier entry is consequently
+# overwritten by the final 0x1f byte, so this is the key used at runtime.
+# Keep this synchronized with the release-time Lua verification.
+PINNED_UPSTREAM_RUNTIME_AES_KEY = bytes([0x1F]) * 32
+
 # These values belong to the pinned upstream uosc_danmaku source and are only
 # used as strict patch anchors. Release builds must replace both of them.
 UPSTREAM_APP_ID_AES_B64 = "UgjRIH45lE1BBLNmir1WKw=="

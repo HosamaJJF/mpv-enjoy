@@ -22,6 +22,10 @@ from dandanplay_credentials import (
 )
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DANDANPLAY_LUA_VERIFIER = PROJECT_ROOT / "scripts" / "verify_dandanplay_credentials.lua"
+
+
 class VerificationError(RuntimeError):
     pass
 
@@ -54,6 +58,58 @@ def file_description(path: Path) -> str:
     return subprocess.run(
         [command, str(path)], text=True, capture_output=True, check=True
     ).stdout.strip()
+
+
+def verify_dandanplay_runtime(mpv: Path, config: Path) -> str:
+    require(
+        DANDANPLAY_LUA_VERIFIER.is_file(),
+        "Missing dandanplay Lua credential verifier",
+    )
+    marker = "DANDANPLAY_LUA_CREDENTIALS_OK"
+    with tempfile.TemporaryDirectory(prefix="mpv-enjoy-dandanplay-") as temporary:
+        marker_path = Path(temporary) / "success"
+        environment = os.environ.copy()
+        environment["MPV_ENJOY_DANMAKU_SCRIPT_ROOT"] = str(
+            config / "scripts" / "uosc_danmaku"
+        )
+        environment["MPV_ENJOY_DANMAKU_VERIFY_MARKER"] = str(marker_path)
+        try:
+            result = subprocess.run(
+                [
+                    str(mpv),
+                    "--no-config",
+                    "--load-scripts=no",
+                    "--idle=yes",
+                    "--terminal=yes",
+                    "--input-terminal=no",
+                    "--vo=null",
+                    "--ao=null",
+                    "--msg-level=all=warn,verify_dandanplay_credentials=info",
+                    "--script={}".format(DANDANPLAY_LUA_VERIFIER),
+                ],
+                cwd=str(mpv.parent),
+                env=environment,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                timeout=30,
+            )
+        except subprocess.TimeoutExpired as error:
+            raise VerificationError(
+                "dandanplay Lua credential verification timed out"
+            ) from error
+        output = result.stdout + result.stderr
+        marker_contents = (
+            marker_path.read_text(encoding="ascii") if marker_path.is_file() else ""
+        )
+        require(
+            result.returncode == 0 and marker_contents == marker,
+            "dandanplay Lua credential verification failed: {}".format(
+                output.strip()
+            ),
+        )
+    return "ok"
 
 
 def verify_config(
@@ -204,8 +260,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.platform == "windows-x64":
             require((args.release / "mpv.exe").is_file(), "Missing mpv.exe")
             require((args.release / "yt-dlp.exe").is_file(), "Missing yt-dlp.exe")
+            mpv_binary = args.release / "mpv.exe"
             config = args.release / "portable_config"
-            description = file_description(args.release / "mpv.exe")
+            description = file_description(mpv_binary)
             if "unavailable" not in description:
                 require("x86-64" in description or "PE32+" in description, "Wrong mpv architecture")
             report["mpv"] = description
@@ -218,8 +275,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             require(os.access(str(launcher), os.X_OK), "macOS launcher is not executable")
             require(helper.is_file(), "Missing macOS launcher helper")
             require((app / "Contents" / "MacOS" / "yt-dlp").is_file(), "Missing macOS yt-dlp")
+            mpv_binary = app / "Contents" / "MacOS" / "mpv-bin"
             config = app / "Contents" / "Resources" / "config-template"
-            description = file_description(app / "Contents" / "MacOS" / "mpv-bin")
+            description = file_description(mpv_binary)
             launcher_description = file_description(launcher)
             yt_dlp_description = file_description(app / "Contents" / "MacOS" / "yt-dlp")
             architecture = MACOS_ARCHES[args.platform]
@@ -273,6 +331,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             report["mpv"] = description
             report["launcher"] = launcher_description
             report["yt_dlp"] = yt_dlp_description
+        report["dandanplay_lua_credentials"] = verify_dandanplay_runtime(
+            mpv_binary, config
+        )
         report.update(verify_config(config, args.platform, credentials))
     except (
         DandanplayCredentialError,

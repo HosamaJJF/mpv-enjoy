@@ -30,12 +30,16 @@ from dandanplay_credentials import (  # noqa: E402
     APP_SECRET_ENV,
     DandanplayCredentialError,
     DandanplayCredentials,
+    PINNED_UPSTREAM_RUNTIME_AES_KEY,
+    UPSTREAM_APP_ID_AES_B64,
+    UPSTREAM_APP_SECRET_AES_B64,
     load_credentials,
     upstream_app_id_assignment,
     upstream_app_secret_assignment,
     verify_patched_lua,
 )
 from encode_dandanplay_credentials import (  # noqa: E402
+    AES_KEY,
     EncodingError,
     encrypt_with_openssl,
     zero_pad,
@@ -517,16 +521,71 @@ class DandanplayCredentialTests(unittest.TestCase):
         with self.assertRaises(EncodingError):
             zero_pad(b"")
 
+    def test_encoder_key_matches_pinned_lua_runtime_behavior(self):
+        lua_table = {index + 1: value for index, value in enumerate(range(32))}
+        for index in range(len(lua_table), 0, -1):
+            lua_table[index - 1] = lua_table[index]
+        del lua_table[32]
+        effective_key = bytes(lua_table[index] for index in range(32))
+
+        self.assertEqual(effective_key, bytes([0x1F]) * 32)
+        self.assertEqual(AES_KEY, effective_key)
+        self.assertEqual(PINNED_UPSTREAM_RUNTIME_AES_KEY, effective_key)
+
     @unittest.skipUnless(shutil.which("openssl"), "openssl is unavailable")
-    def test_openssl_encoder_matches_aes_256_ecb_vector(self):
+    def test_openssl_encoder_matches_pinned_runtime_key_vector(self):
         ciphertext = encrypt_with_openssl(
             shutil.which("openssl"),
             bytes.fromhex("00112233445566778899aabbccddeeff"),
         )
         self.assertEqual(
             base64.b64decode(ciphertext),
-            bytes.fromhex("8ea2b7ca516745bfeafc49904b496089"),
+            bytes.fromhex("5f43822412c9b1dfd2abe1601e1d86a9"),
         )
+
+    @unittest.skipUnless(shutil.which("openssl"), "openssl is unavailable")
+    def test_pinned_upstream_ciphertexts_use_effective_runtime_key(self):
+        plaintexts = []
+        for ciphertext in (
+            UPSTREAM_APP_ID_AES_B64,
+            UPSTREAM_APP_SECRET_AES_B64,
+        ):
+            result = subprocess.run(
+                [
+                    shutil.which("openssl"),
+                    "enc",
+                    "-d",
+                    "-aes-256-ecb",
+                    "-K",
+                    AES_KEY.hex(),
+                    "-nosalt",
+                    "-nopad",
+                ],
+                input=base64.b64decode(ciphertext),
+                capture_output=True,
+                check=True,
+            )
+            plaintexts.append(result.stdout.rstrip(b"\0"))
+
+        self.assertTrue(all(plaintexts))
+        self.assertTrue(
+            all(
+                all(0x21 <= byte <= 0x7E for byte in plaintext)
+                for plaintext in plaintexts
+            )
+        )
+
+    def test_release_verifier_executes_real_lua_credential_check(self):
+        verifier = (PROJECT_ROOT / "scripts" / "verify_release.py").read_text(
+            encoding="utf-8"
+        )
+        lua_verifier = (
+            PROJECT_ROOT / "scripts" / "verify_dandanplay_credentials.lua"
+        ).read_text(encoding="utf-8")
+        self.assertIn("verify_dandanplay_runtime", verifier)
+        self.assertIn("DANDANPLAY_LUA_CREDENTIALS_OK", verifier)
+        self.assertIn("table_to_zero_indexed", lua_verifier)
+        self.assertNotIn("curl", lua_verifier)
 
 
 class ScriptSyntaxTests(unittest.TestCase):
