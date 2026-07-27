@@ -21,6 +21,7 @@ permissions:
 jobs:
   windows-x64:
     runs-on: windows-2025
+    environment: release-credentials
     defaults:
       run:
         shell: msys2 {0}
@@ -55,6 +56,9 @@ jobs:
       - name: Unit tests
         run: python3 -m unittest discover -s tests -v
       - name: Build and package
+        env:
+          MPV_ENJOY_DANDANPLAY_APP_ID_AES_B64: ${{ secrets.MPV_ENJOY_DANDANPLAY_APP_ID_AES_B64 }}
+          MPV_ENJOY_DANDANPLAY_APP_SECRET_AES_B64: ${{ secrets.MPV_ENJOY_DANDANPLAY_APP_SECRET_AES_B64 }}
         run: bash scripts/build-windows-msys2.sh
       - uses: actions/upload-artifact@v7
         with:
@@ -66,6 +70,7 @@ jobs:
 
   macos:
     name: ${{ matrix.platform }}
+    environment: release-credentials
     strategy:
       fail-fast: false
       matrix:
@@ -96,6 +101,9 @@ jobs:
       - name: Unit tests
         run: python3 -m unittest discover -s tests -v
       - name: Build, ad-hoc sign and package
+        env:
+          MPV_ENJOY_DANDANPLAY_APP_ID_AES_B64: ${{ secrets.MPV_ENJOY_DANDANPLAY_APP_ID_AES_B64 }}
+          MPV_ENJOY_DANDANPLAY_APP_SECRET_AES_B64: ${{ secrets.MPV_ENJOY_DANDANPLAY_APP_SECRET_AES_B64 }}
         run: bash scripts/build-macos.sh ${{ matrix.platform }}
       - uses: actions/upload-artifact@v7
         with:

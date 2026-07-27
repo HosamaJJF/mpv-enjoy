@@ -13,6 +13,14 @@ import sys
 import tempfile
 from typing import Dict, List, Optional
 
+from dandanplay_credentials import (
+    DandanplayCredentialError,
+    DandanplayCredentials,
+    credential_fingerprint,
+    load_credentials,
+    verify_patched_lua,
+)
+
 
 class VerificationError(RuntimeError):
     pass
@@ -48,7 +56,11 @@ def file_description(path: Path) -> str:
     ).stdout.strip()
 
 
-def verify_config(config: Path, platform: str) -> Dict[str, str]:
+def verify_config(
+    config: Path,
+    platform: str,
+    credentials: DandanplayCredentials,
+) -> Dict[str, str]:
     required = [
         config / "mpv.conf",
         config / "input.conf",
@@ -81,7 +93,7 @@ def verify_config(config: Path, platform: str) -> Dict[str, str]:
     danmaku_main = (config / "scripts" / "uosc_danmaku" / "main.lua").read_text(
         encoding="utf-8"
     )
-    danmaku_api = (
+    dandanplay_api = (
         config / "scripts" / "uosc_danmaku" / "apis" / "dandanplay.lua"
     ).read_text(encoding="utf-8")
     uosc_conf = (config / "script-opts" / "uosc.conf").read_text(encoding="utf-8")
@@ -89,11 +101,11 @@ def verify_config(config: Path, platform: str) -> Dict[str, str]:
     require('VERSION = "2.2.0"' in danmaku_main, "Unexpected uosc_danmaku version")
     require("require(\"modules/update\")" not in danmaku_main, "Danmaku updater still loads")
     require(
-        "file_info.size >= 16 * 1024 * 1024" in danmaku_api,
+        "file_info.size >= 16 * 1024 * 1024" in dandanplay_api,
         "Danmaku exact-size hash patch is absent",
     )
     require(
-        "file_info.size > 16 * 1024 * 1024" not in danmaku_api,
+        "file_info.size > 16 * 1024 * 1024" not in dandanplay_api,
         "Danmaku exact-size hash bug is still present",
     )
     require("script-binding uosc/update" not in uosc_main, "uosc updater is still in its menu")
@@ -101,6 +113,19 @@ def verify_config(config: Path, platform: str) -> Dict[str, str]:
     require("button:danmaku_menu" in uosc_conf, "uosc danmaku menu button is absent")
     require("button:videotogether" in uosc_conf, "uosc VideoTogether button is absent")
     require(len(uosc_conf) > 10000, "uosc.conf does not look like the complete upstream config")
+    verify_patched_lua(dandanplay_api, credentials)
+    require(
+        "AES.ECB.decrypt(KEY, Base64.decode(appid))" in dandanplay_api,
+        "dandanplay AppId decryption changed unexpectedly",
+    )
+    require(
+        "AES.ECB.decrypt(KEY, Base64.decode(app_accept))" in dandanplay_api,
+        "dandanplay AppSecret decryption changed unexpectedly",
+    )
+    require(
+        "X-Signature: %s" in dandanplay_api and "X-Timestamp: %s" in dandanplay_api,
+        "dandanplay signed request headers changed unexpectedly",
+    )
 
     if platform == "windows-x64":
         ziggy = config / "scripts" / "uosc" / "bin" / "ziggy-windows.exe"
@@ -146,7 +171,11 @@ def verify_config(config: Path, platform: str) -> Dict[str, str]:
                 "universal binary" not in agent_description,
                 "VideoTogether agent must not be Universal",
             )
-    return {"ziggy": ziggy_description, "videotogether_agent": agent_description}
+    return {
+        "dandanplay_credentials": credential_fingerprint(credentials),
+        "videotogether_agent": agent_description,
+        "ziggy": ziggy_description,
+    }
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -155,6 +184,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--release", required=True, type=Path)
     args = parser.parse_args(argv)
     try:
+        credentials = load_credentials(os.environ)
         require(args.release.is_dir(), "Release directory does not exist")
         require((args.release / "SBOM.spdx.json").is_file(), "Missing SPDX SBOM")
         require((args.release / "dependencies.lock.json").is_file(), "Missing dependency lock")
@@ -243,8 +273,14 @@ def main(argv: Optional[List[str]] = None) -> int:
             report["mpv"] = description
             report["launcher"] = launcher_description
             report["yt_dlp"] = yt_dlp_description
-        report.update(verify_config(config, args.platform))
-    except (VerificationError, OSError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
+        report.update(verify_config(config, args.platform, credentials))
+    except (
+        DandanplayCredentialError,
+        VerificationError,
+        OSError,
+        subprocess.CalledProcessError,
+        json.JSONDecodeError,
+    ) as error:
         print("error: {}".format(error), file=sys.stderr)
         return 1
     print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))

@@ -24,6 +24,16 @@ from fetch_dependencies import (
     sha256_file,
 )
 from generate_sbom import build_sbom
+from dandanplay_credentials import (
+    DandanplayCredentialError,
+    DandanplayCredentials,
+    app_id_assignment,
+    app_secret_assignment,
+    load_credentials,
+    upstream_app_id_assignment,
+    upstream_app_secret_assignment,
+    verify_patched_lua,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -148,7 +158,17 @@ def build_uosc_ziggy(uosc_source: Path, config_dir: Path, platform: str) -> None
     output.chmod(output.stat().st_mode | 0o755)
 
 
-def configure_danmaku(source: Path, config_dir: Path) -> None:
+def _replace_exactly_once(text: str, old: str, new: str, label: str) -> str:
+    if text.count(old) != 1:
+        raise AssemblyError(label + " patch no longer matches upstream")
+    return text.replace(old, new, 1)
+
+
+def configure_danmaku(
+    source: Path,
+    config_dir: Path,
+    credentials: DandanplayCredentials,
+) -> None:
     target = config_dir / "scripts" / "uosc_danmaku"
     shutil.copytree(str(source), str(target), ignore=shutil.ignore_patterns(".git*"))
 
@@ -185,6 +205,23 @@ def configure_danmaku(source: Path, config_dir: Path) -> None:
         raise AssemblyError("uosc_danmaku updater patch no longer matches upstream")
     main = main.replace(require_line, "", 1).replace(update_line, replacement, 1)
     write_text(main_path, main)
+
+    api_path = target / "apis" / "dandanplay.lua"
+    api = api_path.read_text(encoding="utf-8")
+    api = _replace_exactly_once(
+        api,
+        upstream_app_id_assignment(),
+        app_id_assignment(credentials.app_id_aes_b64),
+        "dandanplay AppId",
+    )
+    api = _replace_exactly_once(
+        api,
+        upstream_app_secret_assignment(),
+        app_secret_assignment(credentials.app_secret_aes_b64),
+        "dandanplay AppSecret",
+    )
+    verify_patched_lua(api, credentials)
+    write_text(api_path, api)
 
 
 def configure_videotogether(source: Path, config_dir: Path) -> None:
@@ -333,6 +370,8 @@ def write_release_readme(release_root: Path, platform: str) -> None:
 VideoTogether 可通过 uosc 控制栏的“一起看”按钮创建或加入房间。
 本版本更新内容见 `RELEASE-NOTES.zh-CN.md`。
 
+弹幕数据服务由弹弹play开放弹幕网络提供：https://www.dandanplay.com/ 。
+
 依赖版本见 `dependencies.lock.json`，许可证见 `LICENSES`，
 对应上游源码归档位于 `sources`。
 """.format(platform=platform, instructions=instructions)
@@ -469,6 +508,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.build_manifest is not None:
             args.build_manifest = args.build_manifest.resolve()
         _assert_output_target(args.output)
+        credentials = load_credentials(os.environ)
         if args.output.exists():
             if not args.force:
                 raise AssemblyError("Output already exists: {}".format(args.output))
@@ -494,7 +534,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                 copy_common_config(config_dir, args.platform)
                 configure_uosc(extracted["uosc"], config_dir, args.platform)
                 build_uosc_ziggy(extracted["uosc"], config_dir, args.platform)
-                configure_danmaku(extracted["uosc_danmaku"], config_dir)
+                configure_danmaku(
+                    extracted["uosc_danmaku"], config_dir, credentials
+                )
                 configure_videotogether(extracted["uosc_videotogether"], config_dir)
                 build_videotogether_agent(
                     extracted["uosc_videotogether"], config_dir, args.platform
@@ -521,7 +563,13 @@ def main(argv: Optional[List[str]] = None) -> int:
             finally:
                 if staging.exists():
                     shutil.rmtree(str(staging))
-    except (AssemblyError, DependencyError, OSError, subprocess.CalledProcessError) as error:
+    except (
+        AssemblyError,
+        DandanplayCredentialError,
+        DependencyError,
+        OSError,
+        subprocess.CalledProcessError,
+    ) as error:
         print("error: {}".format(error), file=sys.stderr)
         return 1
     print(args.output)

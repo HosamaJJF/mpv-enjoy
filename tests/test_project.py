@@ -1,8 +1,10 @@
+import base64
 import io
 import json
 import os
 from pathlib import Path
 import plistlib
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -23,6 +25,26 @@ from assemble import (  # noqa: E402
     write_metadata,
 )
 from collect_windows_runtime import msys_virtual_path, parse_ldd_references  # noqa: E402
+from dandanplay_credentials import (  # noqa: E402
+    APP_ID_ENV,
+    APP_SECRET_ENV,
+    DandanplayCredentialError,
+    DandanplayCredentials,
+    load_credentials,
+    upstream_app_id_assignment,
+    upstream_app_secret_assignment,
+    verify_patched_lua,
+)
+from encode_dandanplay_credentials import (  # noqa: E402
+    EncodingError,
+    encrypt_with_openssl,
+    zero_pad,
+)
+
+TEST_DANDANPLAY_CREDENTIALS = DandanplayCredentials(
+    base64.b64encode(b"A" * 16).decode("ascii"),
+    base64.b64encode(b"B" * 32).decode("ascii"),
+)
 
 
 class DependencyLockTests(unittest.TestCase):
@@ -164,7 +186,11 @@ class ConfigurationTests(unittest.TestCase):
             "local file_info = utils.file_info(file_path)\n"
             "    if file_info and file_info.size {} 16 * 1024 * 1024 then\n".format(
                 hash_operator
-            ),
+            )
+            + upstream_app_id_assignment()
+            + "\n"
+            + upstream_app_secret_assignment()
+            + "\n",
             encoding="utf-8",
         )
 
@@ -175,7 +201,7 @@ class ConfigurationTests(unittest.TestCase):
             output = root / "output"
             self._write_danmaku_source(source, ">")
 
-            configure_danmaku(source, output)
+            configure_danmaku(source, output, TEST_DANDANPLAY_CREDENTIALS)
 
             dandanplay = (
                 output
@@ -197,7 +223,7 @@ class ConfigurationTests(unittest.TestCase):
             with self.assertRaisesRegex(
                 AssemblyError, "hash threshold patch no longer matches upstream"
             ):
-                configure_danmaku(source, output)
+                configure_danmaku(source, output, TEST_DANDANPLAY_CREDENTIALS)
 
     def test_common_config_has_no_platform_specific_acceleration_stack(self):
         config = (PROJECT_ROOT / "config" / "common" / "mpv.conf").read_text(
@@ -364,6 +390,143 @@ class ConfigurationTests(unittest.TestCase):
         self.assertNotIn("mpv-enjoy-1.1.2-${{ matrix.platform }}.zip", workflow)
         self.assertIn('gh run download "$GITHUB_RUN_ID"', workflow)
         self.assertIn('gh release upload "$GITHUB_REF_NAME"', workflow)
+
+    def test_dandanplay_service_attribution_and_ci_secrets_are_present(self):
+        readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
+        workflow = (PROJECT_ROOT / ".github" / "workflows" / "build.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("弹弹play开放弹幕网络", readme)
+        self.assertIn("https://www.dandanplay.com/", readme)
+        self.assertIn("environment: release-credentials", workflow)
+        self.assertEqual(workflow.count(APP_ID_ENV + ": ${{ secrets." + APP_ID_ENV), 2)
+        self.assertEqual(
+            workflow.count(APP_SECRET_ENV + ": ${{ secrets." + APP_SECRET_ENV), 2
+        )
+
+
+class DandanplayCredentialTests(unittest.TestCase):
+    @staticmethod
+    def credentials():
+        return TEST_DANDANPLAY_CREDENTIALS
+
+    @staticmethod
+    def source_tree(root, api_text=None):
+        source = root / "source"
+        (source / "apis").mkdir(parents=True)
+        (source / "main.lua").write_text(
+            'VERSION = "2.2.0"\n'
+            'require("modules/update")\n'
+            'mp.register_script_message("check-update", check_for_update)\n',
+            encoding="utf-8",
+        )
+        hash_source = (
+            "local file_info = utils.file_info(file_path)\n"
+            "    if file_info and file_info.size > 16 * 1024 * 1024 then\n"
+        )
+        if api_text is None:
+            api_text = (
+                "function make_danmaku_request_args()\n"
+                + upstream_app_id_assignment()
+                + "\n"
+                + upstream_app_secret_assignment()
+                + "\nend\n"
+            )
+        (source / "apis" / "dandanplay.lua").write_text(
+            hash_source + api_text,
+            encoding="utf-8",
+        )
+        return source
+
+    def test_load_credentials_requires_valid_non_upstream_ciphertexts(self):
+        credentials = self.credentials()
+        loaded = load_credentials(
+            {
+                APP_ID_ENV: credentials.app_id_aes_b64,
+                APP_SECRET_ENV: credentials.app_secret_aes_b64,
+            }
+        )
+        self.assertEqual(loaded, credentials)
+
+        invalid_environments = [
+            {},
+            {APP_ID_ENV: "not base64", APP_SECRET_ENV: credentials.app_secret_aes_b64},
+            {
+                APP_ID_ENV: base64.b64encode(b"short").decode("ascii"),
+                APP_SECRET_ENV: credentials.app_secret_aes_b64,
+            },
+            {
+                APP_ID_ENV: upstream_app_id_assignment().split('"')[1],
+                APP_SECRET_ENV: credentials.app_secret_aes_b64,
+            },
+            {
+                APP_ID_ENV: credentials.app_id_aes_b64,
+                APP_SECRET_ENV: upstream_app_secret_assignment().split('"')[1],
+            },
+        ]
+        for environment in invalid_environments:
+            with self.subTest(environment=environment):
+                with self.assertRaises(DandanplayCredentialError):
+                    load_credentials(environment)
+
+    def test_configure_danmaku_patches_only_the_runtime_copy(self):
+        credentials = self.credentials()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = self.source_tree(root)
+            config = root / "config"
+            configure_danmaku(source, config, credentials)
+
+            original_api = (source / "apis" / "dandanplay.lua").read_text(
+                encoding="utf-8"
+            )
+            patched_api = (
+                config / "scripts" / "uosc_danmaku" / "apis" / "dandanplay.lua"
+            ).read_text(encoding="utf-8")
+            patched_main = (
+                config / "scripts" / "uosc_danmaku" / "main.lua"
+            ).read_text(encoding="utf-8")
+
+            self.assertIn(upstream_app_id_assignment(), original_api)
+            self.assertIn(upstream_app_secret_assignment(), original_api)
+            self.assertIn("file_info.size > 16 * 1024 * 1024", original_api)
+            verify_patched_lua(patched_api, credentials)
+            self.assertIn("file_info.size >= 16 * 1024 * 1024", patched_api)
+            self.assertNotIn('require("modules/update")', patched_main)
+            self.assertIn("由 mpv-enjoy 管理", patched_main)
+
+    def test_configure_danmaku_rejects_ambiguous_upstream_assignments(self):
+        credentials = self.credentials()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            api = (
+                upstream_app_id_assignment()
+                + "\n"
+                + upstream_app_id_assignment()
+                + "\n"
+                + upstream_app_secret_assignment()
+                + "\n"
+            )
+            source = self.source_tree(root, api)
+            with self.assertRaises(AssemblyError):
+                configure_danmaku(source, root / "config", credentials)
+
+    def test_zero_padding_matches_upstream_aes_block_behavior(self):
+        self.assertEqual(zero_pad(b"A" * 16), b"A" * 16)
+        self.assertEqual(zero_pad(b"A" * 17), b"A" * 17 + b"\0" * 15)
+        with self.assertRaises(EncodingError):
+            zero_pad(b"")
+
+    @unittest.skipUnless(shutil.which("openssl"), "openssl is unavailable")
+    def test_openssl_encoder_matches_aes_256_ecb_vector(self):
+        ciphertext = encrypt_with_openssl(
+            shutil.which("openssl"),
+            bytes.fromhex("00112233445566778899aabbccddeeff"),
+        )
+        self.assertEqual(
+            base64.b64decode(ciphertext),
+            bytes.fromhex("8ea2b7ca516745bfeafc49904b496089"),
+        )
 
 
 class ScriptSyntaxTests(unittest.TestCase):
