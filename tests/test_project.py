@@ -67,7 +67,7 @@ class DependencyLockTests(unittest.TestCase):
             self.assertNotIn("/main/", spec["url"])
 
     def test_target_architectures_are_exact(self):
-        self.assertEqual(self.lock["project_version"], "1.1.3")
+        self.assertEqual(self.lock["project_version"], "1.1.4")
         self.assertEqual(
             set(self.lock["platform_assets"]),
             {"windows-x64", "macos-arm64", "macos-x64"},
@@ -124,8 +124,7 @@ class DependencyLockTests(unittest.TestCase):
             self.assertTrue(notes.is_file())
             self.assertEqual(
                 notes.read_text(encoding="utf-8").strip(),
-                "为弹弹play服务接口申请并替换使用了mpv-enjoy专属的appid，"
-                "以减轻因上游uosc_danmaku配额用尽导致的晚间弹幕插件无法正常工作的问题",
+                "修改uosc默认播放菜单布局使之更贴近常用播放器",
             )
             checksums = (release / "SHA256SUMS").read_text(encoding="utf-8")
             self.assertIn("RELEASE-NOTES.zh-CN.md", checksums)
@@ -245,14 +244,14 @@ class ConfigurationTests(unittest.TestCase):
         controls = overrides["common"]["controls"]
         self.assertEqual(
             controls,
-            "menu,gap,<video,audio>subtitles,<has_many_audio>audio,"
-            "<has_many_video>video,<has_many_edition>editions,"
-            "<stream>stream-quality,button:danmaku,"
+            "prev,play-pause,next,gap,"
             "cycle:toggle_on:show_danmaku@uosc_danmaku:"
             "on=toggle_on/off=toggle_off?弹幕开关,"
-            "button:danmaku_menu,button:videotogether,gap,space,"
-            "<video,audio>speed,space,shuffle,loop-playlist,loop-file,"
-            "gap,prev,items,next,gap,play-pause,gap,fullscreen",
+            "button:danmaku,gap,button:videotogether,space,"
+            "<video,audio>speed,space,<video,audio>subtitles,"
+            "<has_many_audio>audio,<has_many_video>video,"
+            "<has_many_edition>editions,<stream>stream-quality,"
+            "gap,items,gap,fullscreen",
         )
 
     def test_videotogether_config_avoids_existing_shortcut_conflict(self):
@@ -314,24 +313,23 @@ class ConfigurationTests(unittest.TestCase):
         for path in paths:
             with self.subTest(path=path):
                 text = path.read_text(encoding="utf-8")
-                self.assertIn("mpv-enjoy-1.1.3", text)
-                self.assertNotIn("mpv-enjoy-1.1.2", text)
+                self.assertIn("mpv-enjoy-1.1.4", text)
+                self.assertNotIn("mpv-enjoy-1.1.3", text)
 
-    def test_release_notes_match_1_1_3_description(self):
+    def test_release_notes_match_1_1_4_description(self):
         notes = (
-            PROJECT_ROOT / "release-notes" / "v1.1.3.md"
+            PROJECT_ROOT / "release-notes" / "v1.1.4.md"
         ).read_text(encoding="utf-8")
         self.assertEqual(
             notes.strip(),
-            "为弹弹play服务接口申请并替换使用了mpv-enjoy专属的appid，"
-            "以减轻因上游uosc_danmaku配额用尽导致的晚间弹幕插件无法正常工作的问题",
+            "修改uosc默认播放菜单布局使之更贴近常用播放器",
         )
 
     def test_readme_lists_videotogether_with_integrated_components(self):
         readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
         introduction = readme.split("## 修改配置", 1)[0]
         self.assertIn("uosc_videotogether", introduction)
-        self.assertNotIn("## 1.1.3 更新", readme)
+        self.assertNotIn("## 1.1.4 更新", readme)
 
     def test_macos_launcher_uses_app_support_and_does_not_disable_gatekeeper(self):
         launcher = (PROJECT_ROOT / "scripts" / "macos-launcher.sh").read_text(
@@ -356,12 +354,12 @@ class ConfigurationTests(unittest.TestCase):
             with plist_path.open("wb") as handle:
                 plistlib.dump({"CFBundleExecutable": "mpv"}, handle)
 
-            update_info_plist(app, "1.1.3")
+            update_info_plist(app, "1.1.4")
 
             with plist_path.open("rb") as handle:
                 plist = plistlib.load(handle)
-            self.assertEqual(plist["CFBundleShortVersionString"], "1.1.3")
-            self.assertEqual(plist["CFBundleVersion"], "1.1.3")
+            self.assertEqual(plist["CFBundleShortVersionString"], "1.1.4")
+            self.assertEqual(plist["CFBundleVersion"], "1.1.4")
 
     def test_danmaku_bridge_reannounces_uosc_and_buttons(self):
         bridge = (
@@ -387,9 +385,9 @@ class ConfigurationTests(unittest.TestCase):
         workflow = (
             PROJECT_ROOT / ".github" / "workflows" / "build.yml"
         ).read_text(encoding="utf-8")
-        self.assertIn("mpv-enjoy-1.1.3-$MPV_ENJOY_PLATFORM.dmg", script)
-        self.assertNotIn("mpv-enjoy-1.1.3-$MPV_ENJOY_PLATFORM.zip", script)
-        self.assertNotIn("mpv-enjoy-1.1.3-${{ matrix.platform }}.zip", workflow)
+        self.assertIn("mpv-enjoy-1.1.4-$MPV_ENJOY_PLATFORM.dmg", script)
+        self.assertNotIn("mpv-enjoy-1.1.4-$MPV_ENJOY_PLATFORM.zip", script)
+        self.assertNotIn("mpv-enjoy-1.1.4-${{ matrix.platform }}.zip", workflow)
         self.assertIn('gh run download "$GITHUB_RUN_ID"', workflow)
         self.assertIn('gh release upload "$GITHUB_REF_NAME"', workflow)
 
