@@ -149,6 +149,9 @@ def verify_config(
     danmaku_main = (config / "scripts" / "uosc_danmaku" / "main.lua").read_text(
         encoding="utf-8"
     )
+    danmaku_bridge = (
+        config / "scripts" / "mpv_enjoy_danmaku_bridge.lua"
+    ).read_text(encoding="utf-8")
     dandanplay_api = (
         config / "scripts" / "uosc_danmaku" / "apis" / "dandanplay.lua"
     ).read_text(encoding="utf-8")
@@ -165,18 +168,33 @@ def verify_config(
         "Danmaku exact-size hash bug is still present",
     )
     require(
-        "local should_enable = get_danmaku_visibility()" in danmaku_main
-        and "ENABLED = should_enable" in danmaku_main,
-        "Danmaku file switch state restoration is absent",
+        'toggle_danmaku_switch(ENABLED and "on" or "off")' in danmaku_main
+        and "if not ENABLED then" in danmaku_main,
+        "Danmaku session switch state restoration is absent",
     )
     require(
-        'toggle_danmaku_switch(should_enable and "on" or "off")' in danmaku_main,
-        "Danmaku file switch state is not synchronized with uosc",
+        "local should_enable = get_danmaku_visibility()" not in danmaku_main
+        and "ENABLED = should_enable" not in danmaku_main,
+        "Danmaku switch still restores persisted state across mpv sessions",
     )
     require(
-        "if COMMENTS == nil then" in danmaku_main
+        'show_message("加载弹幕初始化...", 3)' in danmaku_main
+        and "    init(path)\nend)" in danmaku_main
         and "not is_async_running()" not in danmaku_main,
         "Danmaku file switch initialization can still be skipped",
+    )
+    require(
+        "if not (options.autoload_for_url and is_protocol(path)) then"
+        in danmaku_main
+        and '            show_message("加载弹幕初始化...", 3)\n'
+        "            init(path)\n" in danmaku_main,
+        "Danmaku URL file switch initialization can still return early",
+    )
+    require(
+        "user-data/uosc_danmaku/danmaku-switch-on" in danmaku_bridge
+        and "mp.observe_property(switch_property" in danmaku_bridge
+        and "sync_switch()" in danmaku_bridge,
+        "Danmaku bridge does not synchronize the session switch with uosc",
     )
     require(
         'local fps = mp.get_property_number("container-fps", 0)' not in danmaku_main

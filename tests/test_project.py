@@ -66,6 +66,10 @@ DANMAKU_FILE_LOADED_SOURCE = (
     "        return\n"
     "    end\n"
     "\n"
+    "    if filename == nil or dir == nil then\n"
+    "        return\n"
+    "    end\n"
+    "\n"
     "    if ENABLED and COMMENTS == nil and not is_async_running() then\n"
     "        init(path)\n"
     "    end\n"
@@ -250,7 +254,7 @@ class ConfigurationTests(unittest.TestCase):
             ):
                 configure_danmaku(source, output, TEST_DANDANPLAY_CREDENTIALS)
 
-    def test_danmaku_file_switch_state_fix_is_applied(self):
+    def test_danmaku_file_switch_session_state_fix_is_applied(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             source = root / "source"
@@ -267,16 +271,27 @@ class ConfigurationTests(unittest.TestCase):
                 main,
             )
             self.assertNotIn("fps < 23", main)
-            self.assertIn(
+            self.assertNotIn(
                 "local should_enable = get_danmaku_visibility()",
                 main,
             )
-            self.assertIn("ENABLED = should_enable", main)
+            self.assertNotIn("ENABLED = should_enable", main)
             self.assertIn(
-                'toggle_danmaku_switch(should_enable and "on" or "off")',
+                'toggle_danmaku_switch(ENABLED and "on" or "off")',
                 main,
             )
-            self.assertIn("if COMMENTS == nil then", main)
+            self.assertIn("if not ENABLED then", main)
+            self.assertIn('show_message("加载弹幕初始化...", 3)', main)
+            self.assertIn(
+                "if not (options.autoload_for_url and is_protocol(path)) then",
+                main,
+            )
+            self.assertIn(
+                '            show_message("加载弹幕初始化...", 3)\n'
+                "            init(path)\n",
+                main,
+            )
+            self.assertIn("    init(path)\nend)", main)
             self.assertNotIn(
                 "if ENABLED and COMMENTS == nil and not is_async_running() then",
                 main,
@@ -446,6 +461,12 @@ class ConfigurationTests(unittest.TestCase):
         self.assertIn("set-button", bridge)
         self.assertIn("uosc-version", bridge)
         self.assertIn("mp.add_timeout", bridge)
+        self.assertIn(
+            "user-data/uosc_danmaku/danmaku-switch-on",
+            bridge,
+        )
+        self.assertIn("mp.observe_property(switch_property", bridge)
+        self.assertIn("sync_switch()", bridge)
 
     def test_macos_build_has_separate_native_architectures(self):
         script = (PROJECT_ROOT / "scripts" / "build-macos.sh").read_text(encoding="utf-8")
@@ -569,8 +590,17 @@ class DandanplayCredentialTests(unittest.TestCase):
             self.assertIn("file_info.size >= 16 * 1024 * 1024", patched_api)
             self.assertNotIn('require("modules/update")', patched_main)
             self.assertIn("由 mpv-enjoy 管理", patched_main)
-            self.assertIn("ENABLED = should_enable", patched_main)
-            self.assertIn("if COMMENTS == nil then", patched_main)
+            self.assertNotIn("ENABLED = should_enable", patched_main)
+            self.assertIn(
+                'toggle_danmaku_switch(ENABLED and "on" or "off")',
+                patched_main,
+            )
+            self.assertIn("if not ENABLED then", patched_main)
+            self.assertIn('show_message("加载弹幕初始化...", 3)', patched_main)
+            self.assertIn(
+                "if not (options.autoload_for_url and is_protocol(path)) then",
+                patched_main,
+            )
             self.assertNotIn("fps < 23", patched_main)
             self.assertNotIn("not is_async_running()", patched_main)
 
