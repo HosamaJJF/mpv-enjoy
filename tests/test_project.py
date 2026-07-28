@@ -50,6 +50,28 @@ TEST_DANDANPLAY_CREDENTIALS = DandanplayCredentials(
     base64.b64encode(b"B" * 32).decode("ascii"),
 )
 
+DANMAKU_FILE_LOADED_SOURCE = (
+    'mp.register_event("file-loaded", function()\n'
+    '    local path = mp.get_property("path")\n'
+    '    local video = mp.get_property_native("current-tracks/video")\n'
+    '    local fps = mp.get_property_number("container-fps", 0)\n'
+    '    local duration = mp.get_property_number("duration", 0)\n'
+    '    if not video or video["image"] or video["albumart"] or fps < 23 or duration < 60 then\n'
+    "        return\n"
+    "    end\n"
+    "\n"
+    "    read_danmaku_source_record(path)\n"
+    "\n"
+    "    if not get_danmaku_visibility() then\n"
+    "        return\n"
+    "    end\n"
+    "\n"
+    "    if ENABLED and COMMENTS == nil and not is_async_running() then\n"
+    "        init(path)\n"
+    "    end\n"
+    "end)\n"
+)
+
 
 class DependencyLockTests(unittest.TestCase):
     @classmethod
@@ -181,7 +203,8 @@ class ConfigurationTests(unittest.TestCase):
         (source / "main.lua").write_text(
             'VERSION = "2.2.0"\n'
             'require("modules/update")\n'
-            'mp.register_script_message("check-update", check_for_update)\n',
+            'mp.register_script_message("check-update", check_for_update)\n'
+            + DANMAKU_FILE_LOADED_SOURCE,
             encoding="utf-8",
         )
         (source / "apis" / "dandanplay.lua").write_text(
@@ -224,6 +247,57 @@ class ConfigurationTests(unittest.TestCase):
 
             with self.assertRaisesRegex(
                 AssemblyError, "hash threshold patch no longer matches upstream"
+            ):
+                configure_danmaku(source, output, TEST_DANDANPLAY_CREDENTIALS)
+
+    def test_danmaku_file_switch_state_fix_is_applied(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            output = root / "output"
+            self._write_danmaku_source(source, ">")
+
+            configure_danmaku(source, output, TEST_DANDANPLAY_CREDENTIALS)
+
+            main = (
+                output / "scripts" / "uosc_danmaku" / "main.lua"
+            ).read_text(encoding="utf-8")
+            self.assertNotIn(
+                'local fps = mp.get_property_number("container-fps", 0)',
+                main,
+            )
+            self.assertNotIn("fps < 23", main)
+            self.assertIn(
+                "local should_enable = get_danmaku_visibility()",
+                main,
+            )
+            self.assertIn("ENABLED = should_enable", main)
+            self.assertIn(
+                'toggle_danmaku_switch(should_enable and "on" or "off")',
+                main,
+            )
+            self.assertIn("if COMMENTS == nil then", main)
+            self.assertNotIn(
+                "if ENABLED and COMMENTS == nil and not is_async_running() then",
+                main,
+            )
+
+    def test_danmaku_file_switch_fix_fails_when_upstream_no_longer_matches(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            output = root / "output"
+            self._write_danmaku_source(source, ">")
+            main_path = source / "main.lua"
+            main = main_path.read_text(encoding="utf-8").replace(
+                "    if ENABLED and COMMENTS == nil and not is_async_running() then\n",
+                "    if COMMENTS == nil then\n",
+            )
+            main_path.write_text(main, encoding="utf-8")
+
+            with self.assertRaisesRegex(
+                AssemblyError,
+                "file switch initialization patch no longer matches upstream",
             ):
                 configure_danmaku(source, output, TEST_DANDANPLAY_CREDENTIALS)
 
@@ -417,7 +491,8 @@ class DandanplayCredentialTests(unittest.TestCase):
         (source / "main.lua").write_text(
             'VERSION = "2.2.0"\n'
             'require("modules/update")\n'
-            'mp.register_script_message("check-update", check_for_update)\n',
+            'mp.register_script_message("check-update", check_for_update)\n'
+            + DANMAKU_FILE_LOADED_SOURCE,
             encoding="utf-8",
         )
         hash_source = (
@@ -494,6 +569,10 @@ class DandanplayCredentialTests(unittest.TestCase):
             self.assertIn("file_info.size >= 16 * 1024 * 1024", patched_api)
             self.assertNotIn('require("modules/update")', patched_main)
             self.assertIn("由 mpv-enjoy 管理", patched_main)
+            self.assertIn("ENABLED = should_enable", patched_main)
+            self.assertIn("if COMMENTS == nil then", patched_main)
+            self.assertNotIn("fps < 23", patched_main)
+            self.assertNotIn("not is_async_running()", patched_main)
 
     def test_configure_danmaku_rejects_ambiguous_upstream_assignments(self):
         credentials = self.credentials()

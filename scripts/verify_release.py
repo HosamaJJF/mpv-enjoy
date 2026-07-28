@@ -164,6 +164,25 @@ def verify_config(
         "file_info.size > 16 * 1024 * 1024" not in dandanplay_api,
         "Danmaku exact-size hash bug is still present",
     )
+    require(
+        "local should_enable = get_danmaku_visibility()" in danmaku_main
+        and "ENABLED = should_enable" in danmaku_main,
+        "Danmaku file switch state restoration is absent",
+    )
+    require(
+        'toggle_danmaku_switch(should_enable and "on" or "off")' in danmaku_main,
+        "Danmaku file switch state is not synchronized with uosc",
+    )
+    require(
+        "if COMMENTS == nil then" in danmaku_main
+        and "not is_async_running()" not in danmaku_main,
+        "Danmaku file switch initialization can still be skipped",
+    )
+    require(
+        'local fps = mp.get_property_number("container-fps", 0)' not in danmaku_main
+        and "fps < 23" not in danmaku_main,
+        "Danmaku file eligibility still depends on unreliable container FPS",
+    )
     require("script-binding uosc/update" not in uosc_main, "uosc updater is still in its menu")
     require("button:danmaku" in uosc_conf, "uosc danmaku search button is absent")
     require("button:videotogether" in uosc_conf, "uosc VideoTogether button is absent")
