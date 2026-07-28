@@ -194,6 +194,68 @@ def configure_danmaku(
     main = main_path.read_text(encoding="utf-8")
     if 'VERSION = "2.2.0"' not in main:
         raise AssemblyError("Unexpected uosc_danmaku source version")
+    # Keep the switch enabled only for the lifetime of the current mpv process.
+    # Each new file must be initialized when that session switch is on, even
+    # while an asynchronous request from the previous file is being aborted.
+    old_video_eligibility = (
+        '    local fps = mp.get_property_number("container-fps", 0)\n'
+        '    local duration = mp.get_property_number("duration", 0)\n'
+        '    if not video or video["image"] or video["albumart"] or fps < 23 or duration < 60 then\n'
+    )
+    fixed_video_eligibility = (
+        '    local duration = mp.get_property_number("duration", 0)\n'
+        '    if not video or video["image"] or video["albumart"] or duration < 60 then\n'
+    )
+    main = _replace_exactly_once(
+        main,
+        old_video_eligibility,
+        fixed_video_eligibility,
+        "uosc_danmaku video eligibility",
+    )
+    old_visibility_restore = (
+        "    read_danmaku_source_record(path)\n"
+        "\n"
+        "    if not get_danmaku_visibility() then\n"
+        "        return\n"
+        "    end\n"
+    )
+    fixed_session_restore = (
+        "    read_danmaku_source_record(path)\n"
+        "\n"
+        '    toggle_danmaku_switch(ENABLED and "on" or "off")\n'
+        "    if not ENABLED then\n"
+        "        return\n"
+        "    end\n"
+    )
+    main = _replace_exactly_once(
+        main,
+        old_visibility_restore,
+        fixed_session_restore,
+        "uosc_danmaku session switch state",
+    )
+    main = _replace_exactly_once(
+        main,
+        "    if filename == nil or dir == nil then\n"
+        "        return\n"
+        "    end\n",
+        "    if filename == nil or dir == nil then\n"
+        "        if not (options.autoload_for_url and is_protocol(path)) then\n"
+        '            show_message("加载弹幕初始化...", 3)\n'
+        "            init(path)\n"
+        "        end\n"
+        "        return\n"
+        "    end\n",
+        "uosc_danmaku URL file switch initialization",
+    )
+    main = _replace_exactly_once(
+        main,
+        "    if ENABLED and COMMENTS == nil and not is_async_running() then\n"
+        "        init(path)\n"
+        "    end\n",
+        '    show_message("加载弹幕初始化...", 3)\n'
+        "    init(path)\n",
+        "uosc_danmaku file switch initialization",
+    )
     require_line = 'require("modules/update")\n'
     update_line = 'mp.register_script_message("check-update", check_for_update)'
     replacement = (

@@ -50,6 +50,32 @@ TEST_DANDANPLAY_CREDENTIALS = DandanplayCredentials(
     base64.b64encode(b"B" * 32).decode("ascii"),
 )
 
+DANMAKU_FILE_LOADED_SOURCE = (
+    'mp.register_event("file-loaded", function()\n'
+    '    local path = mp.get_property("path")\n'
+    '    local video = mp.get_property_native("current-tracks/video")\n'
+    '    local fps = mp.get_property_number("container-fps", 0)\n'
+    '    local duration = mp.get_property_number("duration", 0)\n'
+    '    if not video or video["image"] or video["albumart"] or fps < 23 or duration < 60 then\n'
+    "        return\n"
+    "    end\n"
+    "\n"
+    "    read_danmaku_source_record(path)\n"
+    "\n"
+    "    if not get_danmaku_visibility() then\n"
+    "        return\n"
+    "    end\n"
+    "\n"
+    "    if filename == nil or dir == nil then\n"
+    "        return\n"
+    "    end\n"
+    "\n"
+    "    if ENABLED and COMMENTS == nil and not is_async_running() then\n"
+    "        init(path)\n"
+    "    end\n"
+    "end)\n"
+)
+
 
 class DependencyLockTests(unittest.TestCase):
     @classmethod
@@ -67,7 +93,7 @@ class DependencyLockTests(unittest.TestCase):
             self.assertNotIn("/main/", spec["url"])
 
     def test_target_architectures_are_exact(self):
-        self.assertEqual(self.lock["project_version"], "1.1.4")
+        self.assertEqual(self.lock["project_version"], "1.1.5")
         self.assertEqual(
             set(self.lock["platform_assets"]),
             {"windows-x64", "macos-arm64", "macos-x64"},
@@ -124,7 +150,7 @@ class DependencyLockTests(unittest.TestCase):
             self.assertTrue(notes.is_file())
             self.assertEqual(
                 notes.read_text(encoding="utf-8").strip(),
-                "修改uosc默认播放菜单布局使之更贴近常用播放器",
+                "通过临时补丁的方式修复uosc_danmaku在切换文件时需要重新关开弹幕开关才能获取弹幕的问题",
             )
             checksums = (release / "SHA256SUMS").read_text(encoding="utf-8")
             self.assertIn("RELEASE-NOTES.zh-CN.md", checksums)
@@ -181,7 +207,8 @@ class ConfigurationTests(unittest.TestCase):
         (source / "main.lua").write_text(
             'VERSION = "2.2.0"\n'
             'require("modules/update")\n'
-            'mp.register_script_message("check-update", check_for_update)\n',
+            'mp.register_script_message("check-update", check_for_update)\n'
+            + DANMAKU_FILE_LOADED_SOURCE,
             encoding="utf-8",
         )
         (source / "apis" / "dandanplay.lua").write_text(
@@ -224,6 +251,68 @@ class ConfigurationTests(unittest.TestCase):
 
             with self.assertRaisesRegex(
                 AssemblyError, "hash threshold patch no longer matches upstream"
+            ):
+                configure_danmaku(source, output, TEST_DANDANPLAY_CREDENTIALS)
+
+    def test_danmaku_file_switch_session_state_fix_is_applied(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            output = root / "output"
+            self._write_danmaku_source(source, ">")
+
+            configure_danmaku(source, output, TEST_DANDANPLAY_CREDENTIALS)
+
+            main = (
+                output / "scripts" / "uosc_danmaku" / "main.lua"
+            ).read_text(encoding="utf-8")
+            self.assertNotIn(
+                'local fps = mp.get_property_number("container-fps", 0)',
+                main,
+            )
+            self.assertNotIn("fps < 23", main)
+            self.assertNotIn(
+                "local should_enable = get_danmaku_visibility()",
+                main,
+            )
+            self.assertNotIn("ENABLED = should_enable", main)
+            self.assertIn(
+                'toggle_danmaku_switch(ENABLED and "on" or "off")',
+                main,
+            )
+            self.assertIn("if not ENABLED then", main)
+            self.assertIn('show_message("加载弹幕初始化...", 3)', main)
+            self.assertIn(
+                "if not (options.autoload_for_url and is_protocol(path)) then",
+                main,
+            )
+            self.assertIn(
+                '            show_message("加载弹幕初始化...", 3)\n'
+                "            init(path)\n",
+                main,
+            )
+            self.assertIn("    init(path)\nend)", main)
+            self.assertNotIn(
+                "if ENABLED and COMMENTS == nil and not is_async_running() then",
+                main,
+            )
+
+    def test_danmaku_file_switch_fix_fails_when_upstream_no_longer_matches(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            output = root / "output"
+            self._write_danmaku_source(source, ">")
+            main_path = source / "main.lua"
+            main = main_path.read_text(encoding="utf-8").replace(
+                "    if ENABLED and COMMENTS == nil and not is_async_running() then\n",
+                "    if COMMENTS == nil then\n",
+            )
+            main_path.write_text(main, encoding="utf-8")
+
+            with self.assertRaisesRegex(
+                AssemblyError,
+                "file switch initialization patch no longer matches upstream",
             ):
                 configure_danmaku(source, output, TEST_DANDANPLAY_CREDENTIALS)
 
@@ -313,23 +402,23 @@ class ConfigurationTests(unittest.TestCase):
         for path in paths:
             with self.subTest(path=path):
                 text = path.read_text(encoding="utf-8")
-                self.assertIn("mpv-enjoy-1.1.4", text)
-                self.assertNotIn("mpv-enjoy-1.1.3", text)
+                self.assertIn("mpv-enjoy-1.1.5", text)
+                self.assertNotIn("mpv-enjoy-1.1.4", text)
 
-    def test_release_notes_match_1_1_4_description(self):
+    def test_release_notes_match_1_1_5_description(self):
         notes = (
-            PROJECT_ROOT / "release-notes" / "v1.1.4.md"
+            PROJECT_ROOT / "release-notes" / "v1.1.5.md"
         ).read_text(encoding="utf-8")
         self.assertEqual(
             notes.strip(),
-            "修改uosc默认播放菜单布局使之更贴近常用播放器",
+            "通过临时补丁的方式修复uosc_danmaku在切换文件时需要重新关开弹幕开关才能获取弹幕的问题",
         )
 
     def test_readme_lists_videotogether_with_integrated_components(self):
         readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
         introduction = readme.split("## 修改配置", 1)[0]
         self.assertIn("uosc_videotogether", introduction)
-        self.assertNotIn("## 1.1.4 更新", readme)
+        self.assertNotIn("## 1.1.5 更新", readme)
 
     def test_macos_launcher_uses_app_support_and_does_not_disable_gatekeeper(self):
         launcher = (PROJECT_ROOT / "scripts" / "macos-launcher.sh").read_text(
@@ -354,12 +443,12 @@ class ConfigurationTests(unittest.TestCase):
             with plist_path.open("wb") as handle:
                 plistlib.dump({"CFBundleExecutable": "mpv"}, handle)
 
-            update_info_plist(app, "1.1.4")
+            update_info_plist(app, "1.1.5")
 
             with plist_path.open("rb") as handle:
                 plist = plistlib.load(handle)
-            self.assertEqual(plist["CFBundleShortVersionString"], "1.1.4")
-            self.assertEqual(plist["CFBundleVersion"], "1.1.4")
+            self.assertEqual(plist["CFBundleShortVersionString"], "1.1.5")
+            self.assertEqual(plist["CFBundleVersion"], "1.1.5")
 
     def test_danmaku_bridge_reannounces_uosc_and_buttons(self):
         bridge = (
@@ -372,6 +461,12 @@ class ConfigurationTests(unittest.TestCase):
         self.assertIn("set-button", bridge)
         self.assertIn("uosc-version", bridge)
         self.assertIn("mp.add_timeout", bridge)
+        self.assertIn(
+            "user-data/uosc_danmaku/danmaku-switch-on",
+            bridge,
+        )
+        self.assertIn("mp.observe_property(switch_property", bridge)
+        self.assertIn("sync_switch()", bridge)
 
     def test_macos_build_has_separate_native_architectures(self):
         script = (PROJECT_ROOT / "scripts" / "build-macos.sh").read_text(encoding="utf-8")
@@ -385,9 +480,9 @@ class ConfigurationTests(unittest.TestCase):
         workflow = (
             PROJECT_ROOT / ".github" / "workflows" / "build.yml"
         ).read_text(encoding="utf-8")
-        self.assertIn("mpv-enjoy-1.1.4-$MPV_ENJOY_PLATFORM.dmg", script)
-        self.assertNotIn("mpv-enjoy-1.1.4-$MPV_ENJOY_PLATFORM.zip", script)
-        self.assertNotIn("mpv-enjoy-1.1.4-${{ matrix.platform }}.zip", workflow)
+        self.assertIn("mpv-enjoy-1.1.5-$MPV_ENJOY_PLATFORM.dmg", script)
+        self.assertNotIn("mpv-enjoy-1.1.5-$MPV_ENJOY_PLATFORM.zip", script)
+        self.assertNotIn("mpv-enjoy-1.1.5-${{ matrix.platform }}.zip", workflow)
         self.assertIn('gh run download "$GITHUB_RUN_ID"', workflow)
         self.assertIn('gh release upload "$GITHUB_REF_NAME"', workflow)
 
@@ -417,7 +512,8 @@ class DandanplayCredentialTests(unittest.TestCase):
         (source / "main.lua").write_text(
             'VERSION = "2.2.0"\n'
             'require("modules/update")\n'
-            'mp.register_script_message("check-update", check_for_update)\n',
+            'mp.register_script_message("check-update", check_for_update)\n'
+            + DANMAKU_FILE_LOADED_SOURCE,
             encoding="utf-8",
         )
         hash_source = (
@@ -494,6 +590,19 @@ class DandanplayCredentialTests(unittest.TestCase):
             self.assertIn("file_info.size >= 16 * 1024 * 1024", patched_api)
             self.assertNotIn('require("modules/update")', patched_main)
             self.assertIn("由 mpv-enjoy 管理", patched_main)
+            self.assertNotIn("ENABLED = should_enable", patched_main)
+            self.assertIn(
+                'toggle_danmaku_switch(ENABLED and "on" or "off")',
+                patched_main,
+            )
+            self.assertIn("if not ENABLED then", patched_main)
+            self.assertIn('show_message("加载弹幕初始化...", 3)', patched_main)
+            self.assertIn(
+                "if not (options.autoload_for_url and is_protocol(path)) then",
+                patched_main,
+            )
+            self.assertNotIn("fps < 23", patched_main)
+            self.assertNotIn("not is_async_running()", patched_main)
 
     def test_configure_danmaku_rejects_ambiguous_upstream_assignments(self):
         credentials = self.credentials()
