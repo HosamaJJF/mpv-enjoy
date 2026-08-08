@@ -616,9 +616,9 @@ class ConfigurationTests(unittest.TestCase):
         notes = (
             PROJECT_ROOT / "release-notes" / "v1.2.0.md"
         ).read_text(encoding="utf-8")
-        self.assertIn("mpv-enjoy Home", notes)
-        self.assertIn("独立进程", notes)
-        self.assertIn("不引入 libmpv", notes)
+        self.assertIn("首页与播放器各自为单独的程序", notes)
+        self.assertIn("由首页负责管理媒体文件夹并拉起播放器", notes)
+        self.assertIn("未来首页完善后嵌入libmpv", notes)
 
     def test_readme_lists_videotogether_with_integrated_components(self):
         readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
