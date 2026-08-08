@@ -314,6 +314,7 @@ class ConfigurationTests(unittest.TestCase):
 
             validate_source(source, "1.0.0")
             integrated_path = write_integrated_config(source, "1.2.0")
+            self.assertNotIn(b"\r\n", integrated_path.read_bytes())
             integrated = json.loads(integrated_path.read_text(encoding="utf-8"))
             self.assertEqual(integrated["productName"], "mpv-enjoy")
             self.assertEqual(integrated["version"], "1.2.0")

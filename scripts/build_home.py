@@ -102,9 +102,8 @@ def write_integrated_config(source: Path, project_version: str) -> Path:
         if window.get("label") == "main":
             window["title"] = "mpv-enjoy"
     destination = source / "src-tauri" / "tauri.integrated.conf.json"
-    destination.write_text(
-        json.dumps(config, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
+    destination.write_bytes(
+        (json.dumps(config, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
     )
     return destination
 
