@@ -21,7 +21,7 @@ MPV_ENJOY_MANIFEST="$MPV_ENJOY_BUILD_DIR/windows-build-dependencies.txt"
 export SOURCE_DATE_EPOCH=1766344646
 cd "$MPV_ENJOY_PROJECT_DIR"
 
-for MPV_ENJOY_TOOL in python3 node npm rustc cargo meson ninja go clang
+for MPV_ENJOY_TOOL in python3 meson ninja go clang
 do
     if ! command -v "$MPV_ENJOY_TOOL" >/dev/null 2>&1; then
         echo "Missing required tool: $MPV_ENJOY_TOOL" >&2
@@ -38,6 +38,13 @@ python3 scripts/fetch_dependencies.py \
 
 if [[ ! -f "$MPV_ENJOY_HOME_EXECUTABLE" || \
       ! -f "$MPV_ENJOY_HOME_METADATA/THIRD-PARTY-LICENSES.json" ]]; then
+    for MPV_ENJOY_HOME_TOOL in node npm rustc cargo
+    do
+        if ! command -v "$MPV_ENJOY_HOME_TOOL" >/dev/null 2>&1; then
+            echo "Missing required Home build tool: $MPV_ENJOY_HOME_TOOL" >&2
+            exit 1
+        fi
+    done
     python3 scripts/build_home.py \
         --platform windows-x64 \
         --source "$MPV_ENJOY_HOME_SOURCE_DIR" \

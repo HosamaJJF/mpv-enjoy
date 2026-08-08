@@ -285,6 +285,14 @@ class ConfigurationTests(unittest.TestCase):
         self.assertIn("actions/setup-node@v6", workflow)
         self.assertIn("toolchain: 1.92.0", workflow)
         self.assertIn("mpv-player", macos)
+        self.assertIn(
+            "for MPV_ENJOY_TOOL in python3 meson ninja go clang", windows
+        )
+        home_guard = windows.index('if [[ ! -f "$MPV_ENJOY_HOME_EXECUTABLE"')
+        home_tools = windows.index(
+            "for MPV_ENJOY_HOME_TOOL in node npm rustc cargo"
+        )
+        self.assertLess(home_guard, home_tools)
 
     def test_home_integrated_config_uses_product_identity(self):
         with tempfile.TemporaryDirectory() as temporary:
