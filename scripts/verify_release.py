@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from typing import Dict, List, Optional
 
 from dandanplay_credentials import (
@@ -58,6 +59,59 @@ def file_description(path: Path) -> str:
     return subprocess.run(
         [command, str(path)], text=True, capture_output=True, check=True
     ).stdout.strip()
+
+
+def verify_macos_video_output(launcher: Path) -> str:
+    with tempfile.TemporaryDirectory(prefix="mpv-enjoy-video-output-") as temporary:
+        temporary_path = Path(temporary)
+        log_path = temporary_path / "mpv.log"
+        environment = os.environ.copy()
+        environment["MPV_ENJOY_HOME"] = str(temporary_path / "home")
+        process = subprocess.Popen(
+            [
+                str(launcher),
+                "--load-scripts=no",
+                "--idle=yes",
+                "--force-window=immediate",
+                "--ao=null",
+                "--terminal=no",
+                "--input-terminal=no",
+                "--msg-level=all=v",
+                "--log-file={}".format(log_path),
+            ],
+            cwd=str(launcher.parent),
+            env=environment,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        deadline = time.monotonic() + 15
+        log = ""
+        try:
+            while time.monotonic() < deadline:
+                if log_path.is_file():
+                    log = log_path.read_text(encoding="utf-8", errors="replace")
+                    if re.search(r"\[vo/(?:gpu-next|gpu|libmpv)\].*reconfig to", log):
+                        break
+                if process.poll() is not None:
+                    break
+                time.sleep(0.1)
+        finally:
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=5)
+        initialized = re.search(
+            r"\[vo/(?:gpu-next|gpu|libmpv)\].*reconfig to", log
+        )
+        require(
+            initialized is not None
+            and "Error opening/initializing the selected video_out" not in log,
+            "macOS video output smoke test failed: {}".format(log[-4000:].strip()),
+        )
+    return "ok"
 
 
 def verify_dandanplay_runtime(mpv: Path, config: Path) -> str:
@@ -386,6 +440,25 @@ def main(argv: Optional[List[str]] = None) -> int:
             require(os.access(str(launcher), os.X_OK), "macOS launcher is not executable")
             require(helper.is_file(), "Missing macOS launcher helper")
             require((app / "Contents" / "MacOS" / "yt-dlp").is_file(), "Missing macOS yt-dlp")
+            moltenvk = app / "Contents" / "Frameworks" / "libMoltenVK.dylib"
+            vulkan_manifest = (
+                app
+                / "Contents"
+                / "Resources"
+                / "vulkan"
+                / "icd.d"
+                / "MoltenVK_icd.json"
+            )
+            require(moltenvk.is_file(), "Missing bundled MoltenVK library")
+            require(vulkan_manifest.is_file(), "Missing bundled MoltenVK ICD manifest")
+            manifest = json.loads(vulkan_manifest.read_text(encoding="utf-8"))
+            library_path = manifest.get("ICD", {}).get("library_path")
+            require(
+                isinstance(library_path, str)
+                and Path(library_path).name == "libMoltenVK.dylib"
+                and (vulkan_manifest.parent / library_path).resolve() == moltenvk.resolve(),
+                "MoltenVK ICD manifest does not resolve to the bundled library",
+            )
             mpv_binary = app / "Contents" / "MacOS" / "mpv-bin"
             config = app / "Contents" / "Resources" / "config-template"
             description = file_description(mpv_binary)
@@ -457,6 +530,7 @@ def main(argv: Optional[List[str]] = None) -> int:
                         (smoke.stderr or smoke.stdout).strip()
                     ),
                 )
+                report["macos_video_output"] = verify_macos_video_output(launcher)
             report["mpv"] = description
             report["home"] = home_description
             report["launcher"] = launcher_description

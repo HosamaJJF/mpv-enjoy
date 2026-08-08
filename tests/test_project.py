@@ -20,6 +20,7 @@ from generate_sbom import build_sbom  # noqa: E402
 from assemble import (  # noqa: E402
     AssemblyError,
     assemble_windows,
+    copy_macos_vulkan_resources,
     configure_danmaku,
     configure_uosc,
     configure_videotogether,
@@ -652,6 +653,48 @@ class ConfigurationTests(unittest.TestCase):
             self.assertEqual(plist["CFBundleVersion"], "1.2.0")
             self.assertEqual(plist["CFBundleExecutable"], "mpv-enjoy-home")
 
+    def test_macos_bundle_copies_vulkan_driver_discovery_resources(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            mpv_contents = root / "mpv.app" / "Contents"
+            manifest = (
+                mpv_contents
+                / "Resources"
+                / "vulkan"
+                / "icd.d"
+                / "MoltenVK_icd.json"
+            )
+            manifest.parent.mkdir(parents=True)
+            manifest.write_text('{"ICD":{"library_path":"../../../Frameworks/libMoltenVK.dylib"}}\n')
+            layer = (
+                mpv_contents
+                / "Resources"
+                / "vulkan"
+                / "explicit_layer.d"
+                / "layer.json"
+            )
+            layer.parent.mkdir(parents=True)
+            layer.write_text("{}\n")
+            app = root / "release" / "mpv-enjoy.app"
+
+            copy_macos_vulkan_resources(mpv_contents, app)
+
+            copied = app / "Contents" / "Resources" / "vulkan"
+            self.assertEqual(
+                (copied / "icd.d" / "MoltenVK_icd.json").read_text(),
+                manifest.read_text(),
+            )
+            self.assertTrue((copied / "explicit_layer.d" / "layer.json").is_file())
+
+    def test_macos_bundle_requires_moltenvk_icd_manifest(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with self.assertRaisesRegex(AssemblyError, "MoltenVK ICD manifest"):
+                copy_macos_vulkan_resources(
+                    root / "mpv.app" / "Contents",
+                    root / "release" / "mpv-enjoy.app",
+                )
+
     def test_danmaku_bridge_reannounces_uosc_and_buttons(self):
         bridge = (
             PROJECT_ROOT
@@ -893,6 +936,14 @@ class DandanplayCredentialTests(unittest.TestCase):
         self.assertIn("DANDANPLAY_LUA_CREDENTIALS_OK", verifier)
         self.assertIn("table_to_zero_indexed", lua_verifier)
         self.assertNotIn("curl", lua_verifier)
+
+    def test_release_verifier_initializes_macos_video_output(self):
+        verifier = (PROJECT_ROOT / "scripts" / "verify_release.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("verify_macos_video_output", verifier)
+        self.assertIn("--force-window=immediate", verifier)
+        self.assertIn("MoltenVK_icd.json", verifier)
 
 
 class ScriptSyntaxTests(unittest.TestCase):

@@ -546,6 +546,19 @@ def copy_macos_binary_for_arch(source: Path, destination: Path, architecture: st
         destination.chmod(destination.stat().st_mode | 0o755)
 
 
+def copy_macos_vulkan_resources(mpv_contents: Path, app: Path) -> None:
+    source = mpv_contents / "Resources" / "vulkan"
+    manifest = source / "icd.d" / "MoltenVK_icd.json"
+    if not manifest.is_file():
+        raise AssemblyError("mpv.app is missing the bundled MoltenVK ICD manifest")
+    shutil.copytree(
+        str(source),
+        str(app / "Contents" / "Resources" / "vulkan"),
+        symlinks=True,
+        dirs_exist_ok=True,
+    )
+
+
 def assemble_macos(
     home_path: Path,
     mpv_path: Path,
@@ -598,6 +611,7 @@ def assemble_macos(
         destination = resources / resource_name
         if source.is_file() and not destination.exists():
             copy_file(source, destination)
+    copy_macos_vulkan_resources(mpv_contents, app)
 
     compile_macos_launcher(macos_dir / "mpv-player", architecture)
     copy_file(PROJECT_ROOT / "scripts" / "macos-launcher.sh", resources / "macos-launcher.sh")
