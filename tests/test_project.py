@@ -48,6 +48,7 @@ from encode_dandanplay_credentials import (  # noqa: E402
     encrypt_with_openssl,
     zero_pad,
 )
+from verify_release import metal_display_available  # noqa: E402
 
 TEST_DANDANPLAY_CREDENTIALS = DandanplayCredentials(
     base64.b64encode(b"A" * 16).decode("ascii"),
@@ -944,6 +945,32 @@ class DandanplayCredentialTests(unittest.TestCase):
         self.assertIn("verify_macos_video_output", verifier)
         self.assertIn("--force-window=immediate", verifier)
         self.assertIn("MoltenVK_icd.json", verifier)
+
+    def test_macos_video_smoke_requires_an_available_metal_display(self):
+        self.assertTrue(
+            metal_display_available(
+                {
+                    "SPDisplaysDataType": [
+                        {"spdisplays_metal": "spdisplays_supported"}
+                    ]
+                }
+            )
+        )
+        self.assertFalse(
+            metal_display_available(
+                {"SPDisplaysDataType": [{"spdisplays_metal": "spdisplays_unsupported"}]}
+            )
+        )
+        self.assertTrue(
+            metal_display_available(
+                {
+                    "SPDisplaysDataType": [
+                        {"spdisplays_mtlgpufamilysupport": "spdisplays_metal4"}
+                    ]
+                }
+            )
+        )
+        self.assertTrue(metal_display_available({"SPDisplaysDataType": []}))
 
 
 class ScriptSyntaxTests(unittest.TestCase):

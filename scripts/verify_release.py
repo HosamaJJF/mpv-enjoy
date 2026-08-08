@@ -61,7 +61,45 @@ def file_description(path: Path) -> str:
     ).stdout.strip()
 
 
+def metal_display_available(payload: object) -> bool:
+    if not isinstance(payload, dict):
+        return True
+    displays = payload.get("SPDisplaysDataType")
+    if not isinstance(displays, list) or not displays:
+        return True
+    return any(
+        isinstance(display, dict)
+        and (
+            display.get("spdisplays_metal") == "spdisplays_supported"
+            or str(display.get("spdisplays_mtlgpufamilysupport", "")).startswith(
+                "spdisplays_metal"
+            )
+        )
+        for display in displays
+    )
+
+
+def macos_has_metal_display() -> bool:
+    system_profiler = Path("/usr/sbin/system_profiler")
+    if not system_profiler.is_file():
+        return True
+    try:
+        result = subprocess.run(
+            [str(system_profiler), "SPDisplaysDataType", "-json"],
+            text=True,
+            capture_output=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            return True
+        return metal_display_available(json.loads(result.stdout))
+    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError):
+        return True
+
+
 def verify_macos_video_output(launcher: Path) -> str:
+    if not macos_has_metal_display():
+        return "skipped-no-metal-display"
     with tempfile.TemporaryDirectory(prefix="mpv-enjoy-video-output-") as temporary:
         temporary_path = Path(temporary)
         log_path = temporary_path / "mpv.log"
@@ -109,7 +147,9 @@ def verify_macos_video_output(launcher: Path) -> str:
         require(
             initialized is not None
             and "Error opening/initializing the selected video_out" not in log,
-            "macOS video output smoke test failed: {}".format(log[-4000:].strip()),
+            "macOS video output smoke test failed (return code {}): {}".format(
+                process.returncode, log[-4000:].strip()
+            ),
         )
     return "ok"
 
