@@ -25,8 +25,11 @@ fi
 MPV_ENJOY_PROJECT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 MPV_ENJOY_BUILD_DIR="$MPV_ENJOY_PROJECT_DIR/build"
 MPV_ENJOY_SOURCE_DIR="$MPV_ENJOY_BUILD_DIR/sources/mpv"
+MPV_ENJOY_HOME_SOURCE_DIR="$MPV_ENJOY_BUILD_DIR/sources/mpv-enjoy-home"
+MPV_ENJOY_HOME_APP="$MPV_ENJOY_BUILD_DIR/home/$MPV_ENJOY_PLATFORM/mpv-enjoy.app"
+MPV_ENJOY_HOME_METADATA="$MPV_ENJOY_BUILD_DIR/home/$MPV_ENJOY_PLATFORM/metadata"
 MPV_ENJOY_MPV_BUILD_DIR="$MPV_ENJOY_BUILD_DIR/mpv-$MPV_ENJOY_PLATFORM"
-MPV_ENJOY_RELEASE_DIR="$MPV_ENJOY_BUILD_DIR/release/mpv-enjoy-1.1.6-$MPV_ENJOY_PLATFORM"
+MPV_ENJOY_RELEASE_DIR="$MPV_ENJOY_BUILD_DIR/release/mpv-enjoy-1.2.0-$MPV_ENJOY_PLATFORM"
 MPV_ENJOY_DIST_DIR="$MPV_ENJOY_PROJECT_DIR/dist"
 MPV_ENJOY_MANIFEST="$MPV_ENJOY_BUILD_DIR/$MPV_ENJOY_PLATFORM-build-dependencies.txt"
 MPV_ENJOY_APP="$MPV_ENJOY_RELEASE_DIR/mpv-enjoy.app"
@@ -36,7 +39,7 @@ export MACOSX_DEPLOYMENT_TARGET=14.0
 export HOMEBREW_NO_AUTO_UPDATE=1
 cd "$MPV_ENJOY_PROJECT_DIR"
 
-for MPV_ENJOY_TOOL in brew python3 meson ninja go clang codesign hdiutil
+for MPV_ENJOY_TOOL in brew python3 node npm rustc cargo meson ninja go clang codesign hdiutil
 do
     if ! command -v "$MPV_ENJOY_TOOL" >/dev/null 2>&1; then
         echo "Missing required tool: $MPV_ENJOY_TOOL" >&2
@@ -51,7 +54,14 @@ python3 scripts/fetch_dependencies.py \
     --all \
     --platform "$MPV_ENJOY_PLATFORM" \
     --extract "mpv=$MPV_ENJOY_SOURCE_DIR" \
+    --extract "mpv_enjoy_home=$MPV_ENJOY_HOME_SOURCE_DIR" \
     --force-extract
+
+python3 scripts/build_home.py \
+    --platform "$MPV_ENJOY_PLATFORM" \
+    --source "$MPV_ENJOY_HOME_SOURCE_DIR" \
+    --output "$MPV_ENJOY_HOME_APP" \
+    --metadata-output "$MPV_ENJOY_HOME_METADATA"
 
 MPV_ENJOY_MESON_ARGS=(
     "$MPV_ENJOY_MPV_BUILD_DIR"
@@ -101,14 +111,17 @@ python3 scripts/capture_build_manifest.py \
 
 python3 scripts/assemble.py \
     --platform "$MPV_ENJOY_PLATFORM" \
+    --home "$MPV_ENJOY_HOME_APP" \
+    --home-metadata "$MPV_ENJOY_HOME_METADATA/THIRD-PARTY-LICENSES.json" \
     --mpv "$MPV_ENJOY_MPV_BUILD_DIR/mpv.app" \
     --output "$MPV_ENJOY_RELEASE_DIR" \
     --build-manifest "$MPV_ENJOY_MANIFEST" \
     --force
 
 for MPV_ENJOY_BINARY in \
+    "$MPV_ENJOY_APP/Contents/MacOS/mpv-enjoy-home" \
     "$MPV_ENJOY_APP/Contents/MacOS/mpv-bin" \
-    "$MPV_ENJOY_APP/Contents/MacOS/mpv" \
+    "$MPV_ENJOY_APP/Contents/MacOS/mpv-player" \
     "$MPV_ENJOY_APP/Contents/MacOS/yt-dlp" \
     "$MPV_ENJOY_APP/Contents/Resources/config-template/scripts/uosc/bin/ziggy-darwin" \
     "$MPV_ENJOY_APP/Contents/Resources/config-template/scripts/uosc_videotogether/bin/uosc-videotogether-agent-darwin"
@@ -128,9 +141,6 @@ done
 /usr/bin/codesign --force --deep --sign - --timestamp=none "$MPV_ENJOY_APP"
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$MPV_ENJOY_APP"
 
-# Exercise the same LaunchServices path Finder uses. The app exits after printing its version.
-/usr/bin/open -W -n "$MPV_ENJOY_APP" --args --version
-
 python3 scripts/write_checksums.py "$MPV_ENJOY_RELEASE_DIR"
 python3 scripts/verify_release.py \
     --platform "$MPV_ENJOY_PLATFORM" \
@@ -142,8 +152,8 @@ python3 scripts/verify_release.py \
     -srcfolder "$MPV_ENJOY_RELEASE_DIR" \
     -ov \
     -format UDZO \
-    "$MPV_ENJOY_DIST_DIR/mpv-enjoy-1.1.6-$MPV_ENJOY_PLATFORM.dmg"
-/usr/bin/hdiutil verify "$MPV_ENJOY_DIST_DIR/mpv-enjoy-1.1.6-$MPV_ENJOY_PLATFORM.dmg"
+    "$MPV_ENJOY_DIST_DIR/mpv-enjoy-1.2.0-$MPV_ENJOY_PLATFORM.dmg"
+/usr/bin/hdiutil verify "$MPV_ENJOY_DIST_DIR/mpv-enjoy-1.2.0-$MPV_ENJOY_PLATFORM.dmg"
 python3 scripts/write_checksums.py "$MPV_ENJOY_DIST_DIR"
 
-echo "macOS package: $MPV_ENJOY_DIST_DIR/mpv-enjoy-1.1.6-$MPV_ENJOY_PLATFORM.dmg"
+echo "macOS package: $MPV_ENJOY_DIST_DIR/mpv-enjoy-1.2.0-$MPV_ENJOY_PLATFORM.dmg"

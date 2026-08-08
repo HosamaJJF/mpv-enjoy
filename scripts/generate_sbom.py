@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import re
 from typing import Dict, List, Optional
+from urllib.parse import quote
 import uuid
 
 
@@ -47,7 +48,58 @@ def package_from_spec(name: str, spec: Dict[str, str]) -> Dict[str, object]:
     }
 
 
-def build_sbom(lock: Dict[str, object], platform: str) -> Dict[str, object]:
+def _home_dependency_packages(
+    inventory: Dict[str, object],
+) -> List[Dict[str, object]]:
+    packages: List[Dict[str, object]] = []
+    seen = set()
+    for raw_component in inventory.get("components", []):  # type: ignore[union-attr]
+        component = dict(raw_component)
+        ecosystem = str(component.get("ecosystem", "unknown"))
+        name = str(component.get("name", "unknown"))
+        version = str(component.get("version", "unknown"))
+        identity = (ecosystem, name, version)
+        if identity in seen:
+            continue
+        seen.add(identity)
+        license_id = str(component.get("license") or "NOASSERTION")
+        if license_id.upper() == "UNKNOWN":
+            license_id = "NOASSERTION"
+        source = str(component.get("source") or "")
+        purl_ecosystem = "cargo" if ecosystem == "cargo" else "npm"
+        purl = "pkg:{}/{}@{}".format(
+            purl_ecosystem,
+            quote(name, safe="/"),
+            quote(version, safe=""),
+        )
+        package_name = "mpv-enjoy-home-{}-{}".format(ecosystem, name)
+        packages.append(
+            {
+                "name": package_name,
+                "SPDXID": spdx_id("{}-{}".format(package_name, version)),
+                "versionInfo": version,
+                "downloadLocation": source if source.startswith("http") else "NOASSERTION",
+                "filesAnalyzed": False,
+                "licenseConcluded": license_id,
+                "licenseDeclared": license_id,
+                "copyrightText": "NOASSERTION",
+                "externalRefs": [
+                    {
+                        "referenceCategory": "PACKAGE-MANAGER",
+                        "referenceType": "purl",
+                        "referenceLocator": purl,
+                    }
+                ],
+            }
+        )
+    return packages
+
+
+def build_sbom(
+    lock: Dict[str, object],
+    platform: str,
+    home_inventory: Optional[Dict[str, object]] = None,
+) -> Dict[str, object]:
     project_version = str(lock["project_version"])
     project_id = "SPDXRef-mpv-enjoy"
     packages: List[Dict[str, object]] = [
@@ -99,6 +151,17 @@ def build_sbom(lock: Dict[str, object], platform: str) -> Dict[str, object]:
             "relatedSpdxElement": spdx_id("yt_dlp_source"),
         }
     )
+    if home_inventory is not None:
+        home_id = spdx_id("mpv_enjoy_home")
+        for home_package in _home_dependency_packages(home_inventory):
+            packages.append(home_package)
+            relationships.append(
+                {
+                    "spdxElementId": home_id,
+                    "relationshipType": "DEPENDS_ON",
+                    "relatedSpdxElement": str(home_package["SPDXID"]),
+                }
+            )
 
     identity = "{}:{}:{}".format(project_version, platform, asset_spec["sha256"])
     return {

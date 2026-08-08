@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from typing import Dict, List, Optional
 
 from dandanplay_credentials import (
@@ -58,6 +59,109 @@ def file_description(path: Path) -> str:
     return subprocess.run(
         [command, str(path)], text=True, capture_output=True, check=True
     ).stdout.strip()
+
+
+def metal_display_available(payload: object) -> bool:
+    if not isinstance(payload, dict):
+        return True
+    displays = payload.get("SPDisplaysDataType")
+    if not isinstance(displays, list) or not displays:
+        return True
+    return any(
+        isinstance(display, dict)
+        and (
+            display.get("spdisplays_metal") == "spdisplays_supported"
+            or str(display.get("spdisplays_mtlgpufamilysupport", "")).startswith(
+                "spdisplays_metal"
+            )
+        )
+        for display in displays
+    )
+
+
+def macos_has_metal_display() -> bool:
+    system_profiler = Path("/usr/sbin/system_profiler")
+    if not system_profiler.is_file():
+        return True
+    try:
+        result = subprocess.run(
+            [str(system_profiler), "SPDisplaysDataType", "-json"],
+            text=True,
+            capture_output=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            return True
+        return metal_display_available(json.loads(result.stdout))
+    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError):
+        return True
+
+
+def is_github_hosted_intel_runner(environment: Dict[str, str]) -> bool:
+    return (
+        environment.get("GITHUB_ACTIONS") == "true"
+        and environment.get("RUNNER_ARCH") == "X64"
+        and bool(environment.get("ImageOS"))
+    )
+
+
+def verify_macos_video_output(launcher: Path) -> str:
+    if is_github_hosted_intel_runner(dict(os.environ)):
+        return "skipped-github-hosted-intel-no-gpu"
+    if not macos_has_metal_display():
+        return "skipped-no-metal-display"
+    with tempfile.TemporaryDirectory(prefix="mpv-enjoy-video-output-") as temporary:
+        temporary_path = Path(temporary)
+        log_path = temporary_path / "mpv.log"
+        environment = os.environ.copy()
+        environment["MPV_ENJOY_HOME"] = str(temporary_path / "home")
+        process = subprocess.Popen(
+            [
+                str(launcher),
+                "--load-scripts=no",
+                "--idle=yes",
+                "--force-window=immediate",
+                "--ao=null",
+                "--terminal=no",
+                "--input-terminal=no",
+                "--msg-level=all=v",
+                "--log-file={}".format(log_path),
+            ],
+            cwd=str(launcher.parent),
+            env=environment,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        deadline = time.monotonic() + 15
+        log = ""
+        try:
+            while time.monotonic() < deadline:
+                if log_path.is_file():
+                    log = log_path.read_text(encoding="utf-8", errors="replace")
+                    if re.search(r"\[vo/(?:gpu-next|gpu|libmpv)\].*reconfig to", log):
+                        break
+                if process.poll() is not None:
+                    break
+                time.sleep(0.1)
+        finally:
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=5)
+        initialized = re.search(
+            r"\[vo/(?:gpu-next|gpu|libmpv)\].*reconfig to", log
+        )
+        require(
+            initialized is not None
+            and "Error opening/initializing the selected video_out" not in log,
+            "macOS video output smoke test failed (return code {}): {}".format(
+                process.returncode, log[-4000:].strip()
+            ),
+        )
+    return "ok"
 
 
 def verify_dandanplay_runtime(mpv: Path, config: Path) -> str:
@@ -305,31 +409,110 @@ def main(argv: Optional[List[str]] = None) -> int:
             (args.release / "LICENSES" / "mpv-enjoy-MIT.md").is_file(),
             "Missing mpv-enjoy MIT license",
         )
-        require((args.release / "sources").is_dir(), "Missing corresponding source archives")
-        json.loads((args.release / "SBOM.spdx.json").read_text(encoding="utf-8"))
+        require(
+            (args.release / "LICENSES" / "mpv-enjoy-home-MIT.txt").is_file(),
+            "Missing mpv-enjoy Home MIT license",
+        )
+        home_inventory_path = (
+            args.release
+            / "LICENSES"
+            / "mpv-enjoy-home-THIRD-PARTY-LICENSES.json"
+        )
+        require(home_inventory_path.is_file(), "Missing Home dependency inventory")
+        home_inventory = json.loads(home_inventory_path.read_text(encoding="utf-8"))
+        require(
+            home_inventory.get("project") == "mpv-enjoy-home"
+            and bool(home_inventory.get("components")),
+            "Invalid Home dependency inventory",
+        )
+        sources = args.release / "sources"
+        require(sources.is_dir(), "Missing corresponding source archives")
+        release_lock = json.loads(
+            (args.release / "dependencies.lock.json").read_text(encoding="utf-8")
+        )
+        home_spec = release_lock.get("components", {}).get("mpv_enjoy_home", {})
+        home_source_filename = home_spec.get("filename")
+        require(
+            isinstance(home_source_filename, str)
+            and (sources / home_source_filename).is_file(),
+            "Missing locked Home source archive",
+        )
+        sbom = json.loads((args.release / "SBOM.spdx.json").read_text(encoding="utf-8"))
+        sbom_names = {package.get("name") for package in sbom.get("packages", [])}
+        require(
+            any(
+                isinstance(name, str) and name.startswith("mpv-enjoy-home-npm-")
+                for name in sbom_names
+            ),
+            "SPDX SBOM is missing Home npm dependencies",
+        )
+        require(
+            any(
+                isinstance(name, str) and name.startswith("mpv-enjoy-home-cargo-")
+                for name in sbom_names
+            ),
+            "SPDX SBOM is missing Home Rust dependencies",
+        )
 
         report: Dict[str, str] = {"platform": args.platform}
         if args.platform == "windows-x64":
+            require((args.release / "mpv-enjoy.exe").is_file(), "Missing Home executable")
             require((args.release / "mpv.exe").is_file(), "Missing mpv.exe")
             require((args.release / "yt-dlp.exe").is_file(), "Missing yt-dlp.exe")
             mpv_binary = args.release / "mpv.exe"
             config = args.release / "portable_config"
             description = file_description(mpv_binary)
+            home_description = file_description(args.release / "mpv-enjoy.exe")
             if "unavailable" not in description:
                 require("x86-64" in description or "PE32+" in description, "Wrong mpv architecture")
+            if "unavailable" not in home_description:
+                require(
+                    "x86-64" in home_description or "PE32+" in home_description,
+                    "Wrong Home architecture",
+                )
             report["mpv"] = description
+            report["home"] = home_description
         else:
             app = args.release / "mpv-enjoy.app"
             require(app.is_dir(), "Missing mpv-enjoy.app")
-            launcher = app / "Contents" / "MacOS" / "mpv"
+            with (app / "Contents" / "Info.plist").open("rb") as handle:
+                plist = plistlib.load(handle)
+            home_executable = plist.get("CFBundleExecutable")
+            require(
+                isinstance(home_executable, str) and bool(home_executable),
+                "Missing Home CFBundleExecutable",
+            )
+            home_binary = app / "Contents" / "MacOS" / str(home_executable)
+            launcher = app / "Contents" / "MacOS" / "mpv-player"
             helper = app / "Contents" / "Resources" / "macos-launcher.sh"
+            require(home_binary.is_file(), "Missing Home application executable")
             require(launcher.is_file(), "Missing native macOS launcher")
             require(os.access(str(launcher), os.X_OK), "macOS launcher is not executable")
             require(helper.is_file(), "Missing macOS launcher helper")
             require((app / "Contents" / "MacOS" / "yt-dlp").is_file(), "Missing macOS yt-dlp")
+            moltenvk = app / "Contents" / "Frameworks" / "libMoltenVK.dylib"
+            vulkan_manifest = (
+                app
+                / "Contents"
+                / "Resources"
+                / "vulkan"
+                / "icd.d"
+                / "MoltenVK_icd.json"
+            )
+            require(moltenvk.is_file(), "Missing bundled MoltenVK library")
+            require(vulkan_manifest.is_file(), "Missing bundled MoltenVK ICD manifest")
+            manifest = json.loads(vulkan_manifest.read_text(encoding="utf-8"))
+            library_path = manifest.get("ICD", {}).get("library_path")
+            require(
+                isinstance(library_path, str)
+                and Path(library_path).name == "libMoltenVK.dylib"
+                and (vulkan_manifest.parent / library_path).resolve() == moltenvk.resolve(),
+                "MoltenVK ICD manifest does not resolve to the bundled library",
+            )
             mpv_binary = app / "Contents" / "MacOS" / "mpv-bin"
             config = app / "Contents" / "Resources" / "config-template"
             description = file_description(mpv_binary)
+            home_description = file_description(home_binary)
             launcher_description = file_description(launcher)
             yt_dlp_description = file_description(app / "Contents" / "MacOS" / "yt-dlp")
             architecture = MACOS_ARCHES[args.platform]
@@ -339,6 +522,18 @@ def main(argv: Optional[List[str]] = None) -> int:
                     "Wrong mpv architecture: {}".format(description),
                 )
                 require("universal binary" not in description, "mpv-bin must not be Universal")
+            if "unavailable" not in home_description:
+                require(
+                    "Mach-O" in home_description and architecture in home_description,
+                    "Home must be a native {} Mach-O executable: {}".format(
+                        architecture,
+                        home_description,
+                    ),
+                )
+                require(
+                    "universal binary" not in home_description,
+                    "Home must not be Universal",
+                )
             if "unavailable" not in launcher_description:
                 require(
                     "Mach-O" in launcher_description and architecture in launcher_description,
@@ -360,9 +555,14 @@ def main(argv: Optional[List[str]] = None) -> int:
                     "universal binary" not in yt_dlp_description,
                     "yt-dlp must not be Universal",
                 )
-            with (app / "Contents" / "Info.plist").open("rb") as handle:
-                plist = plistlib.load(handle)
-            require(plist.get("CFBundleExecutable") == "mpv", "Unexpected CFBundleExecutable")
+            require(
+                plist.get("CFBundleIdentifier") == "io.github.hosamajjf.mpv-enjoy",
+                "Unexpected CFBundleIdentifier",
+            )
+            require(
+                home_executable not in {"mpv-player", "mpv-bin"},
+                "Home must remain the application entrypoint",
+            )
             if sys.platform == "darwin":
                 with tempfile.TemporaryDirectory(prefix="mpv-enjoy-smoke-") as temporary:
                     environment = os.environ.copy()
@@ -380,7 +580,9 @@ def main(argv: Optional[List[str]] = None) -> int:
                         (smoke.stderr or smoke.stdout).strip()
                     ),
                 )
+                report["macos_video_output"] = verify_macos_video_output(launcher)
             report["mpv"] = description
+            report["home"] = home_description
             report["launcher"] = launcher_description
             report["yt_dlp"] = yt_dlp_description
         report["dandanplay_lua_credentials"] = verify_dandanplay_runtime(
