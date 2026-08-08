@@ -48,7 +48,10 @@ from encode_dandanplay_credentials import (  # noqa: E402
     encrypt_with_openssl,
     zero_pad,
 )
-from verify_release import metal_display_available  # noqa: E402
+from verify_release import (  # noqa: E402
+    is_github_hosted_intel_runner,
+    metal_display_available,
+)
 
 TEST_DANDANPLAY_CREDENTIALS = DandanplayCredentials(
     base64.b64encode(b"A" * 16).decode("ascii"),
@@ -971,6 +974,22 @@ class DandanplayCredentialTests(unittest.TestCase):
             )
         )
         self.assertTrue(metal_display_available({"SPDisplaysDataType": []}))
+
+    def test_macos_video_smoke_skips_only_github_hosted_intel_runner(self):
+        hosted_intel = {
+            "GITHUB_ACTIONS": "true",
+            "RUNNER_ARCH": "X64",
+            "ImageOS": "macos15",
+        }
+        self.assertTrue(is_github_hosted_intel_runner(hosted_intel))
+        self.assertFalse(
+            is_github_hosted_intel_runner({**hosted_intel, "RUNNER_ARCH": "ARM64"})
+        )
+        self.assertFalse(
+            is_github_hosted_intel_runner(
+                {key: value for key, value in hosted_intel.items() if key != "ImageOS"}
+            )
+        )
 
 
 class ScriptSyntaxTests(unittest.TestCase):

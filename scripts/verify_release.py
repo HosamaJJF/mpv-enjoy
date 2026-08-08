@@ -97,7 +97,17 @@ def macos_has_metal_display() -> bool:
         return True
 
 
+def is_github_hosted_intel_runner(environment: Dict[str, str]) -> bool:
+    return (
+        environment.get("GITHUB_ACTIONS") == "true"
+        and environment.get("RUNNER_ARCH") == "X64"
+        and bool(environment.get("ImageOS"))
+    )
+
+
 def verify_macos_video_output(launcher: Path) -> str:
+    if is_github_hosted_intel_runner(dict(os.environ)):
+        return "skipped-github-hosted-intel-no-gpu"
     if not macos_has_metal_display():
         return "skipped-no-metal-display"
     with tempfile.TemporaryDirectory(prefix="mpv-enjoy-video-output-") as temporary:
