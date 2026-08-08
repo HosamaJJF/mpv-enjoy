@@ -130,6 +130,7 @@ def verify_config(
         config / "scripts" / "uosc_videotogether" / "main.lua",
         config / "scripts" / "thumbfast.lua",
         config / "scripts" / "mpv_enjoy_danmaku_bridge.lua",
+        config / "scripts" / "mpv_enjoy_sync.lua",
     ]
     for path in required:
         require(path.is_file(), "Missing config component: {}".format(path))
@@ -152,6 +153,9 @@ def verify_config(
     danmaku_bridge = (
         config / "scripts" / "mpv_enjoy_danmaku_bridge.lua"
     ).read_text(encoding="utf-8")
+    sync_script = (config / "scripts" / "mpv_enjoy_sync.lua").read_text(
+        encoding="utf-8"
+    )
     dandanplay_api = (
         config / "scripts" / "uosc_danmaku" / "apis" / "dandanplay.lua"
     ).read_text(encoding="utf-8")
@@ -202,8 +206,20 @@ def verify_config(
         "Danmaku file eligibility still depends on unreliable container FPS",
     )
     require("script-binding uosc/update" not in uosc_main, "uosc updater is still in its menu")
+    require(
+        "script-message-to mpv_enjoy_sync open-menu" in uosc_main,
+        "uosc audio/subtitle sync menu entry is absent",
+    )
     require("button:danmaku" in uosc_conf, "uosc danmaku search button is absent")
+    require("button:danmaku_menu" in uosc_conf, "uosc danmaku settings button is absent")
     require("button:videotogether" in uosc_conf, "uosc VideoTogether button is absent")
+    require(
+        "sub-delay" in sync_script
+        and "audio-delay" in sync_script
+        and "open-menu" in sync_script
+        and "update-menu" in sync_script,
+        "Audio/subtitle sync menu is incomplete",
+    )
     require(len(uosc_conf) > 10000, "uosc.conf does not look like the complete upstream config")
     verify_patched_lua(dandanplay_api, credentials)
     require(

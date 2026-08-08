@@ -20,6 +20,7 @@ from generate_sbom import build_sbom  # noqa: E402
 from assemble import (  # noqa: E402
     AssemblyError,
     configure_danmaku,
+    configure_uosc,
     configure_videotogether,
     update_info_plist,
     write_metadata,
@@ -202,6 +203,37 @@ class WindowsRuntimeTests(unittest.TestCase):
 
 
 class ConfigurationTests(unittest.TestCase):
+    def _write_uosc_source(self, source, audio_menu_item=True):
+        scripts = source / "src" / "uosc"
+        scripts.mkdir(parents=True)
+        (source / "src" / "fonts").mkdir()
+        audio_item = (
+            "\t\t{title = t('Audio tracks'), value = "
+            "'script-binding uosc/audio'},\n"
+            if audio_menu_item
+            else "\t\t{title = t('Audio'), value = 'script-binding uosc/audio'},\n"
+        )
+        (scripts / "main.lua").write_text(
+            "local uosc_version = '5.12.0'\n"
+            "function create_default_menu_items()\n"
+            + audio_item
+            + "\t\t\t\t{title = t('Update uosc'), value = "
+            "'script-binding uosc/update'},\n"
+            "end\n"
+            "bind_command('update', function()\n"
+            "\tif not Elements:has('updater') then require('elements/Updater'):new() end\n"
+            "end)\n",
+            encoding="utf-8",
+        )
+        (source / "src" / "uosc.conf").write_text(
+            "controls=menu\n"
+            "languages=en\n"
+            "autoload=yes\n"
+            "use_trash=yes\n"
+            "default_directory=~/\n",
+            encoding="utf-8",
+        )
+
     def _write_danmaku_source(self, source, hash_operator):
         (source / "apis").mkdir(parents=True)
         (source / "main.lua").write_text(
@@ -336,12 +368,54 @@ class ConfigurationTests(unittest.TestCase):
             "prev,play-pause,next,gap,"
             "cycle:toggle_on:show_danmaku@uosc_danmaku:"
             "on=toggle_on/off=toggle_off?弹幕开关,"
-            "button:danmaku,gap,button:videotogether,space,"
+            "button:danmaku,button:danmaku_menu,gap,"
+            "button:videotogether,space,"
             "<video,audio>speed,space,<video,audio>subtitles,"
             "<has_many_audio>audio,<has_many_video>video,"
             "<has_many_edition>editions,<stream>stream-quality,"
             "gap,items,gap,fullscreen",
         )
+
+    def test_configure_uosc_adds_sync_menu_and_disables_updater(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            output = root / "output"
+            self._write_uosc_source(source)
+
+            configure_uosc(source, output, "windows-x64")
+
+            main = (output / "scripts" / "uosc" / "main.lua").read_text(
+                encoding="utf-8"
+            )
+            config = (output / "script-opts" / "uosc.conf").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("script-message-to mpv_enjoy_sync open-menu", main)
+            self.assertNotIn("script-binding uosc/update", main)
+            self.assertIn("uosc is managed by mpv-enjoy", main)
+            self.assertIn("button:danmaku_menu", config)
+
+    def test_configure_uosc_rejects_changed_sync_menu_anchor(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            self._write_uosc_source(source, audio_menu_item=False)
+
+            with self.assertRaisesRegex(
+                AssemblyError, "sync menu patch no longer matches upstream"
+            ):
+                configure_uosc(source, root / "output", "windows-x64")
+
+    def test_sync_menu_manages_subtitle_and_audio_delay(self):
+        script = (
+            PROJECT_ROOT / "config" / "common" / "scripts" / "mpv_enjoy_sync.lua"
+        ).read_text(encoding="utf-8")
+        self.assertIn("sub-delay", script)
+        self.assertIn("audio-delay", script)
+        self.assertIn("open-menu", script)
+        self.assertIn("update-menu", script)
+        self.assertIn("reset-all", script)
 
     def test_videotogether_config_avoids_existing_shortcut_conflict(self):
         with tempfile.TemporaryDirectory() as temporary:

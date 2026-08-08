@@ -113,6 +113,17 @@ def configure_uosc(uosc_source: Path, config_dir: Path, platform: str) -> None:
     if update_menu not in main or update_binding not in main:
         raise AssemblyError("uosc updater patch no longer matches upstream")
     main = main.replace(update_menu, "", 1).replace(update_binding, managed_binding, 1)
+
+    audio_menu_item = (
+        "\t\t{title = t('Audio tracks'), value = 'script-binding uosc/audio'},\n"
+    )
+    sync_menu_item = (
+        "\t\t{title = '音画同步', value = "
+        "'script-message-to mpv_enjoy_sync open-menu'},\n"
+    )
+    if main.count(audio_menu_item) != 1:
+        raise AssemblyError("uosc sync menu patch no longer matches upstream")
+    main = main.replace(audio_menu_item, audio_menu_item + sync_menu_item, 1)
     write_text(main_path, main)
 
     overrides_path = PROJECT_ROOT / "config" / "uosc-overrides.json"
@@ -430,6 +441,7 @@ def write_release_readme(release_root: Path, platform: str) -> None:
 
 弹幕默认采用手动搜索：`Ctrl+d` 打开搜索，`j` 开关弹幕；uosc 控制栏也提供搜索、开关和设置按钮。
 VideoTogether 可通过 uosc 控制栏的“一起看”按钮创建或加入房间。
+在画面上点击右键或中键，再选择“音画同步”，可调整字幕延迟和音频延迟。
 本版本更新内容见 `RELEASE-NOTES.zh-CN.md`。
 
 弹幕数据服务由弹弹play开放弹幕网络提供：https://www.dandanplay.com/ 。
