@@ -20,6 +20,7 @@ from generate_sbom import build_sbom  # noqa: E402
 from assemble import (  # noqa: E402
     AssemblyError,
     configure_danmaku,
+    configure_uosc,
     configure_videotogether,
     update_info_plist,
     write_metadata,
@@ -93,7 +94,7 @@ class DependencyLockTests(unittest.TestCase):
             self.assertNotIn("/main/", spec["url"])
 
     def test_target_architectures_are_exact(self):
-        self.assertEqual(self.lock["project_version"], "1.1.5")
+        self.assertEqual(self.lock["project_version"], "1.1.6")
         self.assertEqual(
             set(self.lock["platform_assets"]),
             {"windows-x64", "macos-arm64", "macos-x64"},
@@ -150,7 +151,7 @@ class DependencyLockTests(unittest.TestCase):
             self.assertTrue(notes.is_file())
             self.assertEqual(
                 notes.read_text(encoding="utf-8").strip(),
-                "通过临时补丁的方式修复uosc_danmaku在切换文件时需要重新关开弹幕开关才能获取弹幕的问题",
+                "补充弹幕设置和字幕、音频延迟的设置入口，现可以从菜单栏直接打开弹幕设置菜单，并通过右键-音画同步进入音频和字幕延迟设置界面",
             )
             checksums = (release / "SHA256SUMS").read_text(encoding="utf-8")
             self.assertIn("RELEASE-NOTES.zh-CN.md", checksums)
@@ -202,6 +203,37 @@ class WindowsRuntimeTests(unittest.TestCase):
 
 
 class ConfigurationTests(unittest.TestCase):
+    def _write_uosc_source(self, source, audio_menu_item=True):
+        scripts = source / "src" / "uosc"
+        scripts.mkdir(parents=True)
+        (source / "src" / "fonts").mkdir()
+        audio_item = (
+            "\t\t{title = t('Audio tracks'), value = "
+            "'script-binding uosc/audio'},\n"
+            if audio_menu_item
+            else "\t\t{title = t('Audio'), value = 'script-binding uosc/audio'},\n"
+        )
+        (scripts / "main.lua").write_text(
+            "local uosc_version = '5.12.0'\n"
+            "function create_default_menu_items()\n"
+            + audio_item
+            + "\t\t\t\t{title = t('Update uosc'), value = "
+            "'script-binding uosc/update'},\n"
+            "end\n"
+            "bind_command('update', function()\n"
+            "\tif not Elements:has('updater') then require('elements/Updater'):new() end\n"
+            "end)\n",
+            encoding="utf-8",
+        )
+        (source / "src" / "uosc.conf").write_text(
+            "controls=menu\n"
+            "languages=en\n"
+            "autoload=yes\n"
+            "use_trash=yes\n"
+            "default_directory=~/\n",
+            encoding="utf-8",
+        )
+
     def _write_danmaku_source(self, source, hash_operator):
         (source / "apis").mkdir(parents=True)
         (source / "main.lua").write_text(
@@ -336,12 +368,54 @@ class ConfigurationTests(unittest.TestCase):
             "prev,play-pause,next,gap,"
             "cycle:toggle_on:show_danmaku@uosc_danmaku:"
             "on=toggle_on/off=toggle_off?弹幕开关,"
-            "button:danmaku,gap,button:videotogether,space,"
+            "button:danmaku,button:danmaku_menu,gap,"
+            "button:videotogether,space,"
             "<video,audio>speed,space,<video,audio>subtitles,"
             "<has_many_audio>audio,<has_many_video>video,"
             "<has_many_edition>editions,<stream>stream-quality,"
             "gap,items,gap,fullscreen",
         )
+
+    def test_configure_uosc_adds_sync_menu_and_disables_updater(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            output = root / "output"
+            self._write_uosc_source(source)
+
+            configure_uosc(source, output, "windows-x64")
+
+            main = (output / "scripts" / "uosc" / "main.lua").read_text(
+                encoding="utf-8"
+            )
+            config = (output / "script-opts" / "uosc.conf").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("script-message-to mpv_enjoy_sync open-menu", main)
+            self.assertNotIn("script-binding uosc/update", main)
+            self.assertIn("uosc is managed by mpv-enjoy", main)
+            self.assertIn("button:danmaku_menu", config)
+
+    def test_configure_uosc_rejects_changed_sync_menu_anchor(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            self._write_uosc_source(source, audio_menu_item=False)
+
+            with self.assertRaisesRegex(
+                AssemblyError, "sync menu patch no longer matches upstream"
+            ):
+                configure_uosc(source, root / "output", "windows-x64")
+
+    def test_sync_menu_manages_subtitle_and_audio_delay(self):
+        script = (
+            PROJECT_ROOT / "config" / "common" / "scripts" / "mpv_enjoy_sync.lua"
+        ).read_text(encoding="utf-8")
+        self.assertIn("sub-delay", script)
+        self.assertIn("audio-delay", script)
+        self.assertIn("open-menu", script)
+        self.assertIn("update-menu", script)
+        self.assertIn("reset-all", script)
 
     def test_videotogether_config_avoids_existing_shortcut_conflict(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -402,23 +476,23 @@ class ConfigurationTests(unittest.TestCase):
         for path in paths:
             with self.subTest(path=path):
                 text = path.read_text(encoding="utf-8")
-                self.assertIn("mpv-enjoy-1.1.5", text)
-                self.assertNotIn("mpv-enjoy-1.1.4", text)
+                self.assertIn("mpv-enjoy-1.1.6", text)
+                self.assertNotIn("mpv-enjoy-1.1.5", text)
 
-    def test_release_notes_match_1_1_5_description(self):
+    def test_release_notes_match_1_1_6_description(self):
         notes = (
-            PROJECT_ROOT / "release-notes" / "v1.1.5.md"
+            PROJECT_ROOT / "release-notes" / "v1.1.6.md"
         ).read_text(encoding="utf-8")
         self.assertEqual(
             notes.strip(),
-            "通过临时补丁的方式修复uosc_danmaku在切换文件时需要重新关开弹幕开关才能获取弹幕的问题",
+            "补充弹幕设置和字幕、音频延迟的设置入口，现可以从菜单栏直接打开弹幕设置菜单，并通过右键-音画同步进入音频和字幕延迟设置界面",
         )
 
     def test_readme_lists_videotogether_with_integrated_components(self):
         readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
         introduction = readme.split("## 修改配置", 1)[0]
         self.assertIn("uosc_videotogether", introduction)
-        self.assertNotIn("## 1.1.5 更新", readme)
+        self.assertNotIn("## 1.1.6 更新", readme)
 
     def test_macos_launcher_uses_app_support_and_does_not_disable_gatekeeper(self):
         launcher = (PROJECT_ROOT / "scripts" / "macos-launcher.sh").read_text(
@@ -443,12 +517,12 @@ class ConfigurationTests(unittest.TestCase):
             with plist_path.open("wb") as handle:
                 plistlib.dump({"CFBundleExecutable": "mpv"}, handle)
 
-            update_info_plist(app, "1.1.5")
+            update_info_plist(app, "1.1.6")
 
             with plist_path.open("rb") as handle:
                 plist = plistlib.load(handle)
-            self.assertEqual(plist["CFBundleShortVersionString"], "1.1.5")
-            self.assertEqual(plist["CFBundleVersion"], "1.1.5")
+            self.assertEqual(plist["CFBundleShortVersionString"], "1.1.6")
+            self.assertEqual(plist["CFBundleVersion"], "1.1.6")
 
     def test_danmaku_bridge_reannounces_uosc_and_buttons(self):
         bridge = (
@@ -480,9 +554,9 @@ class ConfigurationTests(unittest.TestCase):
         workflow = (
             PROJECT_ROOT / ".github" / "workflows" / "build.yml"
         ).read_text(encoding="utf-8")
-        self.assertIn("mpv-enjoy-1.1.5-$MPV_ENJOY_PLATFORM.dmg", script)
-        self.assertNotIn("mpv-enjoy-1.1.5-$MPV_ENJOY_PLATFORM.zip", script)
-        self.assertNotIn("mpv-enjoy-1.1.5-${{ matrix.platform }}.zip", workflow)
+        self.assertIn("mpv-enjoy-1.1.6-$MPV_ENJOY_PLATFORM.dmg", script)
+        self.assertNotIn("mpv-enjoy-1.1.6-$MPV_ENJOY_PLATFORM.zip", script)
+        self.assertNotIn("mpv-enjoy-1.1.6-${{ matrix.platform }}.zip", workflow)
         self.assertIn('gh run download "$GITHUB_RUN_ID"', workflow)
         self.assertIn('gh release upload "$GITHUB_REF_NAME"', workflow)
 

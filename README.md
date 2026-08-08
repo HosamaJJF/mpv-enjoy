@@ -27,9 +27,17 @@ macOS 版本首次启动后会在 `~/Library/Application Support/mpv-enjoy/confi
 `script-opts/uosc_danmaku.conf` 和
 `script-opts/uosc_videotogether.conf`。Apple Silicon 与 Intel 版本使用相同的配置目录。
 
-uosc 控制栏提供 VideoTogether 一起看按钮。该功能只同步播放状态，不会传输本地媒体
-文件；房间成员需要各自准备可播放的相同内容。如需额外设置快捷键，可在
-`uosc_videotogether.conf` 中填写 `menu_key`。
+uosc 控制栏提供弹幕搜索、开关、设置和 VideoTogether 一起看按钮。一起看功能只同步
+播放状态，不会传输本地媒体文件；房间成员需要各自准备可播放的相同内容。如需额外设置
+快捷键，可在 `uosc_videotogether.conf` 中填写 `menu_key`。
+
+在画面上点击右键或中键打开 uosc 菜单，再选择“音画同步”，可分别调整字幕延迟和音频
+延迟。键盘也可用 `z`/`x` 调整字幕延迟、`c`/`v` 调整音频延迟，或用
+`Shift+Backspace` 将两者同时归零。
+
+macOS 升级安装会保留已有的 `uosc.conf`。老用户如未看到新的“弹幕设置”按钮，可在
+`controls` 中把 `button:danmaku` 改为 `button:danmaku,button:danmaku_menu`，或备份
+自定义内容后删除 `script-opts/uosc.conf` 并重启应用，以重新生成默认配置。
 
 ## 构建
 
@@ -81,13 +89,13 @@ python3 -m unittest discover -s tests -v
 
 python3 scripts/verify_release.py \
   --platform windows-x64 \
-  --release build/release/mpv-enjoy-1.1.5-windows-x64
+  --release build/release/mpv-enjoy-1.1.6-windows-x64
 
 python3 scripts/verify_release.py \
   --platform macos-arm64 \
-  --release build/release/mpv-enjoy-1.1.5-macos-arm64
+  --release build/release/mpv-enjoy-1.1.6-macos-arm64
 
 python3 scripts/verify_release.py \
   --platform macos-x64 \
-  --release build/release/mpv-enjoy-1.1.5-macos-x64
+  --release build/release/mpv-enjoy-1.1.6-macos-x64
 ```

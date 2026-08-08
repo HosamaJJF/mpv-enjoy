@@ -1,6 +1,6 @@
 {
   "common": {
-    "controls": "prev,play-pause,next,gap,cycle:toggle_on:show_danmaku@uosc_danmaku:on=toggle_on/off=toggle_off?弹幕开关,button:danmaku,gap,button:videotogether,space,<video,audio>speed,space,<video,audio>subtitles,<has_many_audio>audio,<has_many_video>video,<has_many_edition>editions,<stream>stream-quality,gap,items,gap,fullscreen",
+    "controls": "prev,play-pause,next,gap,cycle:toggle_on:show_danmaku@uosc_danmaku:on=toggle_on/off=toggle_off?弹幕开关,button:danmaku,button:danmaku_menu,gap,button:videotogether,space,<video,audio>speed,space,<video,audio>subtitles,<has_many_audio>audio,<has_many_video>video,<has_many_edition>editions,<stream>stream-quality,gap,items,gap,fullscreen",
     "languages": "slang,zh-hans,en",
     "autoload": "no",
     "use_trash": "no"
