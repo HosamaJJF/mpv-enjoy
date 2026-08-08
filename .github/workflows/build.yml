@@ -14,6 +14,9 @@ on:
       - 'tests/**'
       - 'release-notes/**'
       - 'dependencies.lock.json'
+      - 'LICENSE.MD'
+      - 'LICENSES/**'
+      - 'README.md'
 
 permissions:
   contents: read
@@ -27,6 +30,14 @@ jobs:
         shell: msys2 {0}
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.92.0
+          targets: x86_64-pc-windows-msvc
+          components: rustfmt, clippy
       - uses: msys2/setup-msys2@v2
         with:
           msystem: CLANG64
@@ -53,6 +64,18 @@ jobs:
         with:
           path: .cache/downloads
           key: mpv-enjoy-downloads-windows-x64-${{ hashFiles('dependencies.lock.json') }}
+      - name: Build Home application shell
+        shell: pwsh
+        run: |
+          python scripts/fetch_dependencies.py `
+            --component mpv_enjoy_home `
+            --extract mpv_enjoy_home=build/sources/mpv-enjoy-home `
+            --force-extract
+          python scripts/build_home.py `
+            --platform windows-x64 `
+            --source build/sources/mpv-enjoy-home `
+            --output build/home/windows-x64/mpv-enjoy.exe `
+            --metadata-output build/home/windows-x64/metadata
       - name: Unit tests
         run: python3 -m unittest discover -s tests -v
       - name: Build and package
@@ -64,7 +87,7 @@ jobs:
         with:
           name: mpv-enjoy-windows-x64
           path: |
-            dist/mpv-enjoy-1.1.6-windows-x64.zip
+            dist/mpv-enjoy-1.2.0-windows-x64.zip
             dist/SHA256SUMS
           if-no-files-found: error
 
@@ -82,6 +105,13 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.92.0
+          components: rustfmt, clippy
       - uses: actions/setup-go@v7
         with:
           go-version: '1.25.x'
@@ -96,7 +126,7 @@ jobs:
         run: >-
           brew install
           autoconf automake pkgconf libtool python freetype fribidi little-cms2 libarchive
-          luajit libass ffmpeg meson rust uchardet mujs libplacebo
+          luajit libass ffmpeg meson uchardet mujs libplacebo
           molten-vk vulkan-loader vulkan-headers
       - name: Unit tests
         run: python3 -m unittest discover -s tests -v
@@ -109,7 +139,7 @@ jobs:
         with:
           name: mpv-enjoy-${{ matrix.platform }}
           path: |
-            dist/mpv-enjoy-1.1.6-${{ matrix.platform }}.dmg
+            dist/mpv-enjoy-1.2.0-${{ matrix.platform }}.dmg
             dist/SHA256SUMS
           if-no-files-found: error
 
@@ -153,9 +183,9 @@ jobs:
             )
           done
           mkdir release-assets
-          cp artifacts/windows-x64/mpv-enjoy-1.1.6-windows-x64.zip release-assets/
-          cp artifacts/macos-arm64/mpv-enjoy-1.1.6-macos-arm64.dmg release-assets/
-          cp artifacts/macos-x64/mpv-enjoy-1.1.6-macos-x64.dmg release-assets/
+          cp artifacts/windows-x64/mpv-enjoy-1.2.0-windows-x64.zip release-assets/
+          cp artifacts/macos-arm64/mpv-enjoy-1.2.0-macos-arm64.dmg release-assets/
+          cp artifacts/macos-x64/mpv-enjoy-1.2.0-macos-x64.dmg release-assets/
           (
             cd release-assets
             sha256sum mpv-enjoy-* > SHA256SUMS

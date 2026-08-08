@@ -19,12 +19,14 @@ from fetch_dependencies import DependencyError, load_lock, safe_extract_tar  # n
 from generate_sbom import build_sbom  # noqa: E402
 from assemble import (  # noqa: E402
     AssemblyError,
+    assemble_windows,
     configure_danmaku,
     configure_uosc,
     configure_videotogether,
     update_info_plist,
     write_metadata,
 )
+from build_home import validate_source, write_integrated_config  # noqa: E402
 from collect_windows_runtime import msys_virtual_path, parse_ldd_references  # noqa: E402
 from dandanplay_credentials import (  # noqa: E402
     APP_ID_ENV,
@@ -94,7 +96,7 @@ class DependencyLockTests(unittest.TestCase):
             self.assertNotIn("/main/", spec["url"])
 
     def test_target_architectures_are_exact(self):
-        self.assertEqual(self.lock["project_version"], "1.1.6")
+        self.assertEqual(self.lock["project_version"], "1.2.0")
         self.assertEqual(
             set(self.lock["platform_assets"]),
             {"windows-x64", "macos-arm64", "macos-x64"},
@@ -103,6 +105,11 @@ class DependencyLockTests(unittest.TestCase):
     def test_expected_component_versions(self):
         components = self.lock["components"]
         self.assertEqual(components["mpv"]["version"], "0.41.0")
+        self.assertEqual(components["mpv_enjoy_home"]["version"], "1.0.0")
+        self.assertEqual(
+            components["mpv_enjoy_home"]["commit"],
+            "709093225c680528fdac0553f174aec37e1f6180",
+        )
         self.assertEqual(components["uosc"]["version"], "5.12.0")
         self.assertEqual(components["uosc_danmaku"]["version"], "2.2.0")
         self.assertEqual(components["uosc_videotogether"]["version"], "1.0.1")
@@ -123,6 +130,7 @@ class DependencyLockTests(unittest.TestCase):
         self.assertIn("uosc", names)
         self.assertIn("uosc_danmaku", names)
         self.assertIn("uosc_videotogether", names)
+        self.assertIn("mpv_enjoy_home", names)
         self.assertIn("yt-dlp-binary-macos-x64", names)
 
         project = next(
@@ -131,11 +139,42 @@ class DependencyLockTests(unittest.TestCase):
         self.assertEqual(project["licenseDeclared"], "MIT")
         self.assertEqual(project["licenseConcluded"], "MIT")
 
+    def test_sbom_expands_home_npm_and_rust_inventory(self):
+        inventory = {
+            "components": [
+                {
+                    "ecosystem": "npm",
+                    "name": "svelte",
+                    "version": "5.56.6",
+                    "license": "MIT",
+                    "source": "https://registry.npmjs.org/svelte/-/svelte-5.56.6.tgz",
+                },
+                {
+                    "ecosystem": "cargo",
+                    "name": "tauri",
+                    "version": "2.11.5",
+                    "license": "MIT OR Apache-2.0",
+                    "source": "registry+https://github.com/rust-lang/crates.io-index",
+                },
+            ]
+        }
+        sbom = build_sbom(self.lock, "windows-x64", inventory)
+        names = {package["name"] for package in sbom["packages"]}
+        self.assertIn("mpv-enjoy-home-npm-svelte", names)
+        self.assertIn("mpv-enjoy-home-cargo-tauri", names)
+        home_relationships = [
+            relationship
+            for relationship in sbom["relationships"]
+            if relationship["spdxElementId"] == "SPDXRef-mpv-enjoy-home"
+        ]
+        self.assertEqual(len(home_relationships), 2)
+
     def test_license_consolidates_project_and_third_party_terms(self):
         license_text = (PROJECT_ROOT / "LICENSE.MD").read_text(encoding="utf-8")
         self.assertIn("MIT License", license_text)
         self.assertIn("Copyright (c) 2026 mpv-enjoy contributors", license_text)
         self.assertIn("mpv-player/mpv", license_text)
+        self.assertIn("HosamaJJF/mpv-enjoy-home", license_text)
         self.assertIn("Tony15246/uosc_danmaku", license_text)
         self.assertIn("HosamaJJF/uosc_videotogether", license_text)
         self.assertFalse((PROJECT_ROOT / "THIRD_PARTY_NOTICES.md").exists())
@@ -151,7 +190,9 @@ class DependencyLockTests(unittest.TestCase):
             self.assertTrue(notes.is_file())
             self.assertEqual(
                 notes.read_text(encoding="utf-8").strip(),
-                "补充弹幕设置和字幕、音频延迟的设置入口，现可以从菜单栏直接打开弹幕设置菜单，并通过右键-音画同步进入音频和字幕延迟设置界面",
+                (
+                    PROJECT_ROOT / "release-notes" / "v1.2.0.md"
+                ).read_text(encoding="utf-8").strip(),
             )
             checksums = (release / "SHA256SUMS").read_text(encoding="utf-8")
             self.assertIn("RELEASE-NOTES.zh-CN.md", checksums)
@@ -173,6 +214,30 @@ class ArchiveSafetyTests(unittest.TestCase):
 
 
 class WindowsRuntimeTests(unittest.TestCase):
+    def test_assembly_keeps_home_as_entrypoint_and_mpv_runtime(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            home = root / "home.exe"
+            home.write_bytes(b"home")
+            runtime = root / "runtime"
+            runtime.mkdir()
+            (runtime / "mpv.exe").write_bytes(b"mpv")
+            (runtime / "mpv.com").write_bytes(b"console")
+            config = root / "config"
+            config.mkdir()
+            (config / "mpv.conf").write_text("", encoding="utf-8")
+            yt_dlp = root / "yt-dlp.exe"
+            yt_dlp.write_bytes(b"yt-dlp")
+            release = root / "release"
+            release.mkdir()
+
+            assemble_windows(home, runtime, release, config, yt_dlp)
+
+            self.assertEqual((release / "mpv-enjoy.exe").read_bytes(), b"home")
+            self.assertEqual((release / "mpv.exe").read_bytes(), b"mpv")
+            self.assertTrue((release / "mpv.com").is_file())
+            self.assertTrue((release / "portable_config" / "mpv.conf").is_file())
+
     def test_parses_modern_msys2_ldd_paths(self):
         output = "\n".join(
             [
@@ -203,6 +268,60 @@ class WindowsRuntimeTests(unittest.TestCase):
 
 
 class ConfigurationTests(unittest.TestCase):
+    def test_home_integration_keeps_process_player_and_pinned_toolchains(self):
+        windows = (PROJECT_ROOT / "scripts" / "build-windows-msys2.sh").read_text(
+            encoding="utf-8"
+        )
+        macos = (PROJECT_ROOT / "scripts" / "build-macos.sh").read_text(
+            encoding="utf-8"
+        )
+        workflow = (
+            PROJECT_ROOT / ".github" / "workflows" / "build.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("scripts/build_home.py", windows)
+        self.assertIn("scripts/build_home.py", macos)
+        self.assertIn("-Dlibmpv=false", windows)
+        self.assertIn("-Dlibmpv=false", macos)
+        self.assertIn("actions/setup-node@v6", workflow)
+        self.assertIn("toolchain: 1.92.0", workflow)
+        self.assertIn("mpv-player", macos)
+
+    def test_home_integrated_config_uses_product_identity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary)
+            tauri = source / "src-tauri"
+            tauri.mkdir()
+            (source / "package.json").write_text(
+                json.dumps({"version": "1.0.0"}), encoding="utf-8"
+            )
+            (source / "package-lock.json").write_text("{}\n", encoding="utf-8")
+            (tauri / "Cargo.lock").write_text("", encoding="utf-8")
+            (tauri / "Cargo.toml").write_text(
+                '[package]\nname = "mpv-enjoy-home"\nversion = "1.0.0"\n\n[dependencies]\n',
+                encoding="utf-8",
+            )
+            (tauri / "tauri.conf.json").write_text(
+                json.dumps(
+                    {
+                        "productName": "mpv-enjoy Home",
+                        "version": "1.0.0",
+                        "identifier": "io.github.hosamajjf.mpv-enjoy-home",
+                        "app": {"windows": [{"label": "main", "title": "Home"}]},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            validate_source(source, "1.0.0")
+            integrated_path = write_integrated_config(source, "1.2.0")
+            integrated = json.loads(integrated_path.read_text(encoding="utf-8"))
+            self.assertEqual(integrated["productName"], "mpv-enjoy")
+            self.assertEqual(integrated["version"], "1.2.0")
+            self.assertEqual(
+                integrated["identifier"], "io.github.hosamajjf.mpv-enjoy"
+            )
+            self.assertEqual(integrated["app"]["windows"][0]["title"], "mpv-enjoy")
+
     def _write_uosc_source(self, source, audio_menu_item=True):
         scripts = source / "src" / "uosc"
         scripts.mkdir(parents=True)
@@ -476,23 +595,22 @@ class ConfigurationTests(unittest.TestCase):
         for path in paths:
             with self.subTest(path=path):
                 text = path.read_text(encoding="utf-8")
-                self.assertIn("mpv-enjoy-1.1.6", text)
-                self.assertNotIn("mpv-enjoy-1.1.5", text)
+                self.assertIn("mpv-enjoy-1.2.0", text)
+                self.assertNotIn("mpv-enjoy-1.1.6", text)
 
-    def test_release_notes_match_1_1_6_description(self):
+    def test_release_notes_describe_home_process_integration(self):
         notes = (
-            PROJECT_ROOT / "release-notes" / "v1.1.6.md"
+            PROJECT_ROOT / "release-notes" / "v1.2.0.md"
         ).read_text(encoding="utf-8")
-        self.assertEqual(
-            notes.strip(),
-            "补充弹幕设置和字幕、音频延迟的设置入口，现可以从菜单栏直接打开弹幕设置菜单，并通过右键-音画同步进入音频和字幕延迟设置界面",
-        )
+        self.assertIn("mpv-enjoy Home", notes)
+        self.assertIn("独立进程", notes)
+        self.assertIn("不引入 libmpv", notes)
 
     def test_readme_lists_videotogether_with_integrated_components(self):
         readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
         introduction = readme.split("## 修改配置", 1)[0]
         self.assertIn("uosc_videotogether", introduction)
-        self.assertNotIn("## 1.1.6 更新", readme)
+        self.assertNotIn("## 1.2.0 更新", readme)
 
     def test_macos_launcher_uses_app_support_and_does_not_disable_gatekeeper(self):
         launcher = (PROJECT_ROOT / "scripts" / "macos-launcher.sh").read_text(
@@ -515,14 +633,15 @@ class ConfigurationTests(unittest.TestCase):
             plist_path = app / "Contents" / "Info.plist"
             plist_path.parent.mkdir(parents=True)
             with plist_path.open("wb") as handle:
-                plistlib.dump({"CFBundleExecutable": "mpv"}, handle)
+                plistlib.dump({"CFBundleExecutable": "mpv-enjoy-home"}, handle)
 
-            update_info_plist(app, "1.1.6")
+            update_info_plist(app, "1.2.0")
 
             with plist_path.open("rb") as handle:
                 plist = plistlib.load(handle)
-            self.assertEqual(plist["CFBundleShortVersionString"], "1.1.6")
-            self.assertEqual(plist["CFBundleVersion"], "1.1.6")
+            self.assertEqual(plist["CFBundleShortVersionString"], "1.2.0")
+            self.assertEqual(plist["CFBundleVersion"], "1.2.0")
+            self.assertEqual(plist["CFBundleExecutable"], "mpv-enjoy-home")
 
     def test_danmaku_bridge_reannounces_uosc_and_buttons(self):
         bridge = (
@@ -554,9 +673,9 @@ class ConfigurationTests(unittest.TestCase):
         workflow = (
             PROJECT_ROOT / ".github" / "workflows" / "build.yml"
         ).read_text(encoding="utf-8")
-        self.assertIn("mpv-enjoy-1.1.6-$MPV_ENJOY_PLATFORM.dmg", script)
-        self.assertNotIn("mpv-enjoy-1.1.6-$MPV_ENJOY_PLATFORM.zip", script)
-        self.assertNotIn("mpv-enjoy-1.1.6-${{ matrix.platform }}.zip", workflow)
+        self.assertIn("mpv-enjoy-1.2.0-$MPV_ENJOY_PLATFORM.dmg", script)
+        self.assertNotIn("mpv-enjoy-1.2.0-$MPV_ENJOY_PLATFORM.zip", script)
+        self.assertNotIn("mpv-enjoy-1.2.0-${{ matrix.platform }}.zip", workflow)
         self.assertIn('gh run download "$GITHUB_RUN_ID"', workflow)
         self.assertIn('gh release upload "$GITHUB_REF_NAME"', workflow)
 

@@ -39,6 +39,7 @@ from dandanplay_credentials import (
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 REQUIRED_COMPONENTS = (
     "mpv",
+    "mpv_enjoy_home",
     "uosc",
     "uosc_danmaku",
     "uosc_videotogether",
@@ -362,6 +363,7 @@ def copy_licenses_and_sources(
     release_root: Path,
     extracted: Dict[str, Path],
     archives: Dict[str, Path],
+    home_metadata: Path,
 ) -> None:
     licenses = release_root / "LICENSES"
     sources = release_root / "sources"
@@ -372,6 +374,7 @@ def copy_licenses_and_sources(
     candidates = {
         "mpv-GPL-2.0.txt": extracted["mpv"] / "LICENSE.GPL",
         "mpv-LGPL-2.1.txt": extracted["mpv"] / "LICENSE.LGPL",
+        "mpv-enjoy-home-MIT.txt": extracted["mpv_enjoy_home"] / "LICENSE",
         "uosc-LGPL-2.1.txt": extracted["uosc"] / "LICENSE.LGPL",
         "uosc_danmaku-MIT.txt": extracted["uosc_danmaku"] / "LICENSE",
         "uosc_videotogether-MIT.txt": extracted["uosc_videotogether"] / "LICENSE",
@@ -390,6 +393,10 @@ def copy_licenses_and_sources(
     yt_third_party = extracted["yt_dlp_source"] / "THIRD_PARTY_LICENSES.txt"
     if yt_third_party.is_file():
         copy_file(yt_third_party, licenses / "yt-dlp-THIRD_PARTY_LICENSES.txt")
+    copy_file(
+        home_metadata,
+        licenses / "mpv-enjoy-home-THIRD-PARTY-LICENSES.json",
+    )
     for name, archive in archives.items():
         copy_file(archive, sources / archive.name)
 
@@ -399,6 +406,7 @@ def write_metadata(
     lock: Dict[str, object],
     platform: str,
     build_manifest: Optional[Path],
+    home_inventory: Optional[Dict[str, object]] = None,
 ) -> None:
     copy_file(PROJECT_ROOT / "dependencies.lock.json", release_root / "dependencies.lock.json")
     release_notes = (
@@ -413,7 +421,7 @@ def write_metadata(
         if not build_manifest.is_file():
             raise AssemblyError("Build manifest does not exist: {}".format(build_manifest))
         copy_file(build_manifest, release_root / "BUILD-DEPENDENCIES.txt")
-    sbom = build_sbom(lock, platform)
+    sbom = build_sbom(lock, platform, home_inventory)
     with (release_root / "SBOM.spdx.json").open("w", encoding="utf-8", newline="\n") as handle:
         json.dump(sbom, handle, ensure_ascii=False, indent=2, sort_keys=True)
         handle.write("\n")
@@ -426,7 +434,8 @@ def write_metadata(
 def write_release_readme(release_root: Path, platform: str) -> None:
     if platform == "windows-x64":
         instructions = (
-            "解压后直接运行 `mpv.exe`。配置位于 `portable_config`，自定义选项可写入 "
+            "解压后运行 `mpv-enjoy.exe` 打开媒体首页，首页会使用同目录内置的 mpv 播放。"
+            "也可直接运行 `mpv.exe`。配置位于 `portable_config`，自定义选项可写入 "
             "`portable_config/user.conf`。"
         )
     else:
@@ -452,7 +461,16 @@ VideoTogether 可通过 uosc 控制栏的“一起看”按钮创建或加入房
     write_text(release_root / "README-FIRST.zh-CN.md", text)
 
 
-def assemble_windows(mpv_path: Path, release_root: Path, config_dir: Path, yt_dlp: Path) -> None:
+def assemble_windows(
+    home_path: Path,
+    mpv_path: Path,
+    release_root: Path,
+    config_dir: Path,
+    yt_dlp: Path,
+) -> None:
+    if not home_path.is_file() or home_path.suffix.lower() != ".exe":
+        raise AssemblyError("Windows --home must point to the Home executable")
+    copy_file(home_path, release_root / "mpv-enjoy.exe", executable=True)
     if mpv_path.is_file():
         if mpv_path.name.lower() != "mpv.exe":
             raise AssemblyError("Windows --mpv file must be mpv.exe")
@@ -529,6 +547,7 @@ def copy_macos_binary_for_arch(source: Path, destination: Path, architecture: st
 
 
 def assemble_macos(
+    home_path: Path,
     mpv_path: Path,
     release_root: Path,
     config_dir: Path,
@@ -536,20 +555,51 @@ def assemble_macos(
     project_version: str,
     platform: str,
 ) -> None:
+    if not home_path.is_dir() or home_path.suffix != ".app":
+        raise AssemblyError("macOS --home must point to the Home application bundle")
     if not mpv_path.is_dir() or mpv_path.suffix != ".app":
         raise AssemblyError("macOS --mpv must point to an mpv.app bundle")
     architecture = MACOS_ARCHES[platform]["macho"]
     app = release_root / "mpv-enjoy.app"
-    shutil.copytree(str(mpv_path), str(app), symlinks=True)
+    shutil.copytree(str(home_path), str(app), symlinks=True)
     for placeholder in app.rglob(".gitkeep"):
         placeholder.unlink()
     macos_dir = app / "Contents" / "MacOS"
     resources = app / "Contents" / "Resources"
-    binary = macos_dir / "mpv"
-    if not binary.is_file():
+    with (app / "Contents" / "Info.plist").open("rb") as handle:
+        home_plist = plistlib.load(handle)
+    home_executable = home_plist.get("CFBundleExecutable")
+    if not isinstance(home_executable, str) or not (
+        macos_dir / home_executable
+    ).is_file():
+        raise AssemblyError("Home application bundle has no executable")
+
+    mpv_contents = mpv_path / "Contents"
+    mpv_binary = mpv_contents / "MacOS" / "mpv"
+    if not mpv_binary.is_file():
         raise AssemblyError("mpv.app is missing Contents/MacOS/mpv")
-    binary.rename(macos_dir / "mpv-bin")
-    compile_macos_launcher(binary, architecture)
+    copy_macos_binary_for_arch(mpv_binary, macos_dir / "mpv-bin", architecture)
+    mpv_libraries = mpv_contents / "MacOS" / "lib"
+    if mpv_libraries.is_dir():
+        shutil.copytree(
+            str(mpv_libraries), str(macos_dir / "lib"), symlinks=True, dirs_exist_ok=True
+        )
+    for directory_name in ("Frameworks", "PlugIns", "SharedSupport"):
+        source = mpv_contents / directory_name
+        if source.is_dir():
+            shutil.copytree(
+                str(source),
+                str(app / "Contents" / directory_name),
+                symlinks=True,
+                dirs_exist_ok=True,
+            )
+    for resource_name in ("Assets.car", "document.icns"):
+        source = mpv_contents / "Resources" / resource_name
+        destination = resources / resource_name
+        if source.is_file() and not destination.exists():
+            copy_file(source, destination)
+
+    compile_macos_launcher(macos_dir / "mpv-player", architecture)
     copy_file(PROJECT_ROOT / "scripts" / "macos-launcher.sh", resources / "macos-launcher.sh")
     copy_macos_binary_for_arch(yt_dlp, macos_dir / "yt-dlp", architecture)
     shutil.copytree(str(config_dir), str(resources / "config-template"))
@@ -568,6 +618,15 @@ def _assert_output_target(output: Path) -> None:
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--platform", required=True, choices=SUPPORTED_PLATFORMS)
+    parser.add_argument(
+        "--home", required=True, type=Path, help="built Home executable or application bundle"
+    )
+    parser.add_argument(
+        "--home-metadata",
+        required=True,
+        type=Path,
+        help="Home npm/Rust dependency license inventory",
+    )
     parser.add_argument("--mpv", required=True, type=Path, help="mpv runtime directory or .app")
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--cache", type=Path, default=DEFAULT_CACHE)
@@ -576,12 +635,17 @@ def main(argv: Optional[List[str]] = None) -> int:
     args = parser.parse_args(argv)
 
     try:
+        args.home = args.home.resolve()
+        args.home_metadata = args.home_metadata.resolve()
         args.mpv = args.mpv.resolve()
         args.output = args.output.resolve()
         args.cache = args.cache.resolve()
         if args.build_manifest is not None:
             args.build_manifest = args.build_manifest.resolve()
         _assert_output_target(args.output)
+        if not args.home_metadata.is_file():
+            raise AssemblyError("Home dependency inventory does not exist")
+        home_inventory = json.loads(args.home_metadata.read_text(encoding="utf-8"))
         credentials = load_credentials(os.environ)
         if args.output.exists():
             if not args.force:
@@ -589,6 +653,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             shutil.rmtree(str(args.output))
         lock = load_lock()
         components = component_specs(lock)
+        if home_inventory.get("project") != "mpv-enjoy-home" or str(
+            home_inventory.get("version")
+        ) != str(components["mpv_enjoy_home"]["version"]):
+            raise AssemblyError("Home dependency inventory does not match the locked source")
         archives: Dict[str, Path] = {}
         extracted: Dict[str, Path] = {}
         with tempfile.TemporaryDirectory(prefix="mpv-enjoy-sources-") as temporary:
@@ -620,9 +688,12 @@ def main(argv: Optional[List[str]] = None) -> int:
                 release_root = staging / "release"
                 release_root.mkdir()
                 if args.platform == "windows-x64":
-                    assemble_windows(args.mpv, release_root, config_dir, yt_dlp)
+                    assemble_windows(
+                        args.home, args.mpv, release_root, config_dir, yt_dlp
+                    )
                 else:
                     assemble_macos(
+                        args.home,
                         args.mpv,
                         release_root,
                         config_dir,
@@ -630,9 +701,17 @@ def main(argv: Optional[List[str]] = None) -> int:
                         str(lock["project_version"]),
                         args.platform,
                     )
-                copy_licenses_and_sources(release_root, extracted, archives)
+                copy_licenses_and_sources(
+                    release_root, extracted, archives, args.home_metadata
+                )
                 write_release_readme(release_root, args.platform)
-                write_metadata(release_root, lock, args.platform, args.build_manifest)
+                write_metadata(
+                    release_root,
+                    lock,
+                    args.platform,
+                    args.build_manifest,
+                    home_inventory,
+                )
                 release_root.rename(args.output)
             finally:
                 if staging.exists():
@@ -641,6 +720,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         AssemblyError,
         DandanplayCredentialError,
         DependencyError,
+        json.JSONDecodeError,
         OSError,
         subprocess.CalledProcessError,
     ) as error:

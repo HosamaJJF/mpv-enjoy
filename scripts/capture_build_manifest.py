@@ -30,6 +30,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     args = parser.parse_args(argv)
     commands: List[Tuple[str, Sequence[str]]] = [
         ("Python", ["python3", "--version"]),
+        ("Node.js", ["node", "--version"]),
+        ("npm", ["npm", "--version"]),
+        ("Rust", ["rustc", "--version"]),
+        ("Cargo", ["cargo", "--version"]),
         ("Meson", ["meson", "--version"]),
         ("Ninja", ["ninja", "--version"]),
         ("Go", ["go", "version"]),

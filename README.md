@@ -4,7 +4,9 @@
 [uosc_danmaku](https://github.com/Tony15246/uosc_danmaku) 的播放体验，我参考并学习了
 mpv_PlayKit，制作了这套面向 Windows 和 macOS 的开箱即用 mpv 整合包。
 
-项目提供 Windows x64、macOS Apple Silicon 和 macOS Intel 三个独立版本，集成 mpv、完整
+项目提供 Windows x64、macOS Apple Silicon 和 macOS Intel 三个独立版本。统一入口使用
+[mpv-enjoy Home](https://github.com/HosamaJJF/mpv-enjoy-home) 浏览本地媒体及
+Emby/Jellyfin，播放仍由同一发行包内的独立 mpv 进程负责。发行包还集成完整
 [uosc](https://github.com/tomasklaen/uosc)、uosc_danmaku、
 [uosc_videotogether](https://github.com/HosamaJJF/uosc_videotogether)、thumbfast 与
 yt-dlp。由于需要兼顾多个平台，未沿用 mpv_PlayKit 中的各类着色器整合；有需要时可自行
@@ -14,6 +16,9 @@ yt-dlp。由于需要兼顾多个平台，未沿用 mpv_PlayKit 中的各类着�
 不要将其用于批量抓取或下载弹幕数据库。
 
 ## 修改配置
+
+Windows 解压后运行 `mpv-enjoy.exe`，macOS 打开 `mpv-enjoy.app`。需要绕过首页直接播放时，
+Windows 仍可运行同目录的 `mpv.exe`；macOS 的播放器由首页通过包内受管启动器调用。
 
 Windows 版本的配置位于程序目录下的 `portable_config`。推荐把自定义 mpv 选项写入
 `portable_config/user.conf`；快捷键、uosc、弹幕和一起看插件配置分别位于
@@ -78,8 +83,10 @@ MPV_ENJOY_DANDANPLAY_APP_SECRET_AES_B64
 ./scripts/build-macos.sh macos-x64
 ```
 
-Windows 脚本从源码编译 mpv、收集运行库并生成便携 ZIP。macOS 脚本从源码编译对应架构的
-应用，仅生成 DMG，并使用 ad-hoc 身份签名。没有 Developer ID 公证时，首次启动可能
+构建还需要 Node.js 22 和 Rust 1.92；首页源码与其他组件一样由
+`dependencies.lock.json` 固定并在构建时下载。Windows 脚本从源码构建首页和 mpv、收集
+运行库并生成便携 ZIP。macOS 脚本从源码构建首页和对应架构的 mpv，仅生成 DMG，并在完成
+应用组装后统一使用 ad-hoc 身份签名。没有 Developer ID 公证时，首次启动可能
 需要在 Finder 中右键选择“打开”，或前往“系统设置 → 隐私与安全性 → 仍要打开”。
 
 ## 本地校验
@@ -89,13 +96,13 @@ python3 -m unittest discover -s tests -v
 
 python3 scripts/verify_release.py \
   --platform windows-x64 \
-  --release build/release/mpv-enjoy-1.1.6-windows-x64
+  --release build/release/mpv-enjoy-1.2.0-windows-x64
 
 python3 scripts/verify_release.py \
   --platform macos-arm64 \
-  --release build/release/mpv-enjoy-1.1.6-macos-arm64
+  --release build/release/mpv-enjoy-1.2.0-macos-arm64
 
 python3 scripts/verify_release.py \
   --platform macos-x64 \
-  --release build/release/mpv-enjoy-1.1.6-macos-x64
+  --release build/release/mpv-enjoy-1.2.0-macos-x64
 ```
