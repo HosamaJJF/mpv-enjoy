@@ -101,7 +101,7 @@ class DependencyLockTests(unittest.TestCase):
             self.assertNotIn("/main/", spec["url"])
 
     def test_target_architectures_are_exact(self):
-        self.assertEqual(self.lock["project_version"], "1.2.0")
+        self.assertEqual(self.lock["project_version"], "1.2.1")
         self.assertEqual(
             set(self.lock["platform_assets"]),
             {"windows-x64", "macos-arm64", "macos-x64"},
@@ -200,7 +200,7 @@ class DependencyLockTests(unittest.TestCase):
             self.assertEqual(
                 notes.read_text(encoding="utf-8").strip(),
                 (
-                    PROJECT_ROOT / "release-notes" / "v1.2.0.md"
+                    PROJECT_ROOT / "release-notes" / "v1.2.1.md"
                 ).read_text(encoding="utf-8").strip(),
             )
             checksums = (release / "SHA256SUMS").read_text(encoding="utf-8")
@@ -330,11 +330,11 @@ class ConfigurationTests(unittest.TestCase):
             )
 
             validate_source(source, "1.0.1")
-            integrated_path = write_integrated_config(source, "1.2.0")
+            integrated_path = write_integrated_config(source, "1.2.1")
             self.assertNotIn(b"\r\n", integrated_path.read_bytes())
             integrated = json.loads(integrated_path.read_text(encoding="utf-8"))
             self.assertEqual(integrated["productName"], "mpv-enjoy")
-            self.assertEqual(integrated["version"], "1.2.0")
+            self.assertEqual(integrated["version"], "1.2.1")
             self.assertEqual(
                 integrated["identifier"], "io.github.hosamajjf.mpv-enjoy"
             )
@@ -613,8 +613,8 @@ class ConfigurationTests(unittest.TestCase):
         for path in paths:
             with self.subTest(path=path):
                 text = path.read_text(encoding="utf-8")
-                self.assertIn("mpv-enjoy-1.2.0", text)
-                self.assertNotIn("mpv-enjoy-1.1.6", text)
+                self.assertIn("mpv-enjoy-1.2.1", text)
+                self.assertNotIn("mpv-enjoy-1.2.0", text)
 
     def test_release_notes_describe_home_process_integration(self):
         notes = (
@@ -628,7 +628,7 @@ class ConfigurationTests(unittest.TestCase):
         readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
         introduction = readme.split("## 修改配置", 1)[0]
         self.assertIn("uosc_videotogether", introduction)
-        self.assertNotIn("## 1.2.0 更新", readme)
+        self.assertNotIn("## 1.2.1 更新", readme)
 
     def test_macos_launcher_uses_app_support_and_does_not_disable_gatekeeper(self):
         launcher = (PROJECT_ROOT / "scripts" / "macos-launcher.sh").read_text(
@@ -653,12 +653,12 @@ class ConfigurationTests(unittest.TestCase):
             with plist_path.open("wb") as handle:
                 plistlib.dump({"CFBundleExecutable": "mpv-enjoy-home"}, handle)
 
-            update_info_plist(app, "1.2.0")
+            update_info_plist(app, "1.2.1")
 
             with plist_path.open("rb") as handle:
                 plist = plistlib.load(handle)
-            self.assertEqual(plist["CFBundleShortVersionString"], "1.2.0")
-            self.assertEqual(plist["CFBundleVersion"], "1.2.0")
+            self.assertEqual(plist["CFBundleShortVersionString"], "1.2.1")
+            self.assertEqual(plist["CFBundleVersion"], "1.2.1")
             self.assertEqual(plist["CFBundleExecutable"], "mpv-enjoy-home")
 
     def test_macos_bundle_copies_vulkan_driver_discovery_resources(self):
@@ -734,9 +734,9 @@ class ConfigurationTests(unittest.TestCase):
         workflow = (
             PROJECT_ROOT / ".github" / "workflows" / "build.yml"
         ).read_text(encoding="utf-8")
-        self.assertIn("mpv-enjoy-1.2.0-$MPV_ENJOY_PLATFORM.dmg", script)
-        self.assertNotIn("mpv-enjoy-1.2.0-$MPV_ENJOY_PLATFORM.zip", script)
-        self.assertNotIn("mpv-enjoy-1.2.0-${{ matrix.platform }}.zip", workflow)
+        self.assertIn("mpv-enjoy-1.2.1-$MPV_ENJOY_PLATFORM.dmg", script)
+        self.assertNotIn("mpv-enjoy-1.2.1-$MPV_ENJOY_PLATFORM.zip", script)
+        self.assertNotIn("mpv-enjoy-1.2.1-${{ matrix.platform }}.zip", workflow)
         self.assertIn('gh run download "$GITHUB_RUN_ID"', workflow)
         self.assertIn('gh release upload "$GITHUB_REF_NAME"', workflow)
 
