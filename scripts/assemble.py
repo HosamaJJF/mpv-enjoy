@@ -98,7 +98,7 @@ def configure_uosc(uosc_source: Path, config_dir: Path, platform: str) -> None:
 
     main_path = target / "main.lua"
     main = main_path.read_text(encoding="utf-8")
-    if "local uosc_version = '5.12.0'" not in main:
+    if "local uosc_version = '5.13.0'" not in main:
         raise AssemblyError("Unexpected uosc source version")
     update_menu = "\t\t\t\t{title = t('Update uosc'), value = 'script-binding uosc/update'},\n"
     update_binding = (

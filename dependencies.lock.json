@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-08T08:39:04Z",
-  "project_version": "1.2.0",
+  "generated_at": "2026-08-09T05:59:49Z",
+  "project_version": "1.2.1",
   "components": {
     "mpv": {
       "version": "0.41.0",
@@ -14,23 +14,23 @@
       "license": "GPL-2.0-or-later AND LGPL-2.1-or-later"
     },
     "mpv_enjoy_home": {
-      "version": "1.0.0",
-      "ref": "v1.0.0",
-      "commit": "709093225c680528fdac0553f174aec37e1f6180",
+      "version": "1.0.1",
+      "ref": "v1.0.1",
+      "commit": "f2eee67ee19437733ec55f728a0bf912c3bd133d",
       "repository": "https://github.com/HosamaJJF/mpv-enjoy-home",
-      "url": "https://codeload.github.com/HosamaJJF/mpv-enjoy-home/tar.gz/709093225c680528fdac0553f174aec37e1f6180",
-      "filename": "mpv-enjoy-home-1.0.0-7090932.tar.gz",
-      "sha256": "00144b1f039615fd1be64c5faecf6eed78f6b1f439b6d1d2974fcf0a7fb6a990",
+      "url": "https://codeload.github.com/HosamaJJF/mpv-enjoy-home/tar.gz/f2eee67ee19437733ec55f728a0bf912c3bd133d",
+      "filename": "mpv-enjoy-home-1.0.1-f2eee67.tar.gz",
+      "sha256": "88b4894377523838c5da4af65f028b84b93c63b3aad05f47de9fcd6c49dcda77",
       "license": "MIT"
     },
     "uosc": {
-      "version": "5.12.0",
-      "ref": "5.12.0",
-      "commit": "748bb238a962f8aecd0af51ee4b46651b58f6c51",
+      "version": "5.13.0",
+      "ref": "5.13.0",
+      "commit": "d124c2c930d69446448022851373e00ae592390d",
       "repository": "https://github.com/tomasklaen/uosc",
-      "url": "https://codeload.github.com/tomasklaen/uosc/tar.gz/748bb238a962f8aecd0af51ee4b46651b58f6c51",
-      "filename": "uosc-5.12.0.tar.gz",
-      "sha256": "cc2cd65f964d40e13dd9f3d23820d2c93a00911b99352868705a9614e3259723",
+      "url": "https://codeload.github.com/tomasklaen/uosc/tar.gz/d124c2c930d69446448022851373e00ae592390d",
+      "filename": "uosc-5.13.0.tar.gz",
+      "sha256": "c0df0c04cae467b6b20256a7c6a52dcbefc55f1ebd3b9794e907ca2481603bc6",
       "license": "LGPL-2.1-only"
     },
     "uosc_danmaku": {

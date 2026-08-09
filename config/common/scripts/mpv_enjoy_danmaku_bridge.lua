@@ -39,7 +39,7 @@ local function register_integration()
         )
     end
     -- uosc sends this once at startup; repeating it avoids a script-load race.
-    mp.commandv('script-message', 'uosc-version', '5.12.0')
+    mp.commandv('script-message', 'uosc-version', '5.13.0')
     sync_switch()
 end
 

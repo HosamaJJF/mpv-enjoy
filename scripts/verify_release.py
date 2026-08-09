@@ -264,7 +264,7 @@ def verify_config(
         config / "scripts" / "uosc_danmaku" / "apis" / "dandanplay.lua"
     ).read_text(encoding="utf-8")
     uosc_conf = (config / "script-opts" / "uosc.conf").read_text(encoding="utf-8")
-    require("local uosc_version = '5.12.0'" in uosc_main, "Unexpected uosc version")
+    require("local uosc_version = '5.13.0'" in uosc_main, "Unexpected uosc version")
     require('VERSION = "2.2.0"' in danmaku_main, "Unexpected uosc_danmaku version")
     require("require(\"modules/update\")" not in danmaku_main, "Danmaku updater still loads")
     require(
