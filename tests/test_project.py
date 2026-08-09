@@ -110,12 +110,16 @@ class DependencyLockTests(unittest.TestCase):
     def test_expected_component_versions(self):
         components = self.lock["components"]
         self.assertEqual(components["mpv"]["version"], "0.41.0")
-        self.assertEqual(components["mpv_enjoy_home"]["version"], "1.0.0")
+        self.assertEqual(components["mpv_enjoy_home"]["version"], "1.0.1")
         self.assertEqual(
             components["mpv_enjoy_home"]["commit"],
-            "709093225c680528fdac0553f174aec37e1f6180",
+            "f2eee67ee19437733ec55f728a0bf912c3bd133d",
         )
-        self.assertEqual(components["uosc"]["version"], "5.12.0")
+        self.assertEqual(components["uosc"]["version"], "5.13.0")
+        self.assertEqual(
+            components["uosc"]["commit"],
+            "d124c2c930d69446448022851373e00ae592390d",
+        )
         self.assertEqual(components["uosc_danmaku"]["version"], "2.2.0")
         self.assertEqual(components["uosc_videotogether"]["version"], "1.0.1")
         self.assertEqual(
@@ -305,19 +309,19 @@ class ConfigurationTests(unittest.TestCase):
             tauri = source / "src-tauri"
             tauri.mkdir()
             (source / "package.json").write_text(
-                json.dumps({"version": "1.0.0"}), encoding="utf-8"
+                json.dumps({"version": "1.0.1"}), encoding="utf-8"
             )
             (source / "package-lock.json").write_text("{}\n", encoding="utf-8")
             (tauri / "Cargo.lock").write_text("", encoding="utf-8")
             (tauri / "Cargo.toml").write_text(
-                '[package]\nname = "mpv-enjoy-home"\nversion = "1.0.0"\n\n[dependencies]\n',
+                '[package]\nname = "mpv-enjoy-home"\nversion = "1.0.1"\n\n[dependencies]\n',
                 encoding="utf-8",
             )
             (tauri / "tauri.conf.json").write_text(
                 json.dumps(
                     {
                         "productName": "mpv-enjoy Home",
-                        "version": "1.0.0",
+                        "version": "1.0.1",
                         "identifier": "io.github.hosamajjf.mpv-enjoy-home",
                         "app": {"windows": [{"label": "main", "title": "Home"}]},
                     }
@@ -325,7 +329,7 @@ class ConfigurationTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            validate_source(source, "1.0.0")
+            validate_source(source, "1.0.1")
             integrated_path = write_integrated_config(source, "1.2.0")
             self.assertNotIn(b"\r\n", integrated_path.read_bytes())
             integrated = json.loads(integrated_path.read_text(encoding="utf-8"))
@@ -347,7 +351,7 @@ class ConfigurationTests(unittest.TestCase):
             else "\t\t{title = t('Audio'), value = 'script-binding uosc/audio'},\n"
         )
         (scripts / "main.lua").write_text(
-            "local uosc_version = '5.12.0'\n"
+            "local uosc_version = '5.13.0'\n"
             "function create_default_menu_items()\n"
             + audio_item
             + "\t\t\t\t{title = t('Update uosc'), value = "
@@ -709,6 +713,7 @@ class ConfigurationTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("set-button", bridge)
         self.assertIn("uosc-version", bridge)
+        self.assertIn("'uosc-version', '5.13.0'", bridge)
         self.assertIn("mp.add_timeout", bridge)
         self.assertIn(
             "user-data/uosc_danmaku/danmaku-switch-on",
