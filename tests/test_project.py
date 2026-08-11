@@ -101,7 +101,7 @@ class DependencyLockTests(unittest.TestCase):
             self.assertNotIn("/main/", spec["url"])
 
     def test_target_architectures_are_exact(self):
-        self.assertEqual(self.lock["project_version"], "1.2.1")
+        self.assertEqual(self.lock["project_version"], "1.2.2")
         self.assertEqual(
             set(self.lock["platform_assets"]),
             {"windows-x64", "macos-arm64", "macos-x64"},
@@ -110,10 +110,10 @@ class DependencyLockTests(unittest.TestCase):
     def test_expected_component_versions(self):
         components = self.lock["components"]
         self.assertEqual(components["mpv"]["version"], "0.41.0")
-        self.assertEqual(components["mpv_enjoy_home"]["version"], "1.0.1")
+        self.assertEqual(components["mpv_enjoy_home"]["version"], "1.0.2")
         self.assertEqual(
             components["mpv_enjoy_home"]["commit"],
-            "f2eee67ee19437733ec55f728a0bf912c3bd133d",
+            "9a20828e21e8feea54b969cf22fb551afb4aa6b0",
         )
         self.assertEqual(components["uosc"]["version"], "5.13.0")
         self.assertEqual(
@@ -200,7 +200,7 @@ class DependencyLockTests(unittest.TestCase):
             self.assertEqual(
                 notes.read_text(encoding="utf-8").strip(),
                 (
-                    PROJECT_ROOT / "release-notes" / "v1.2.1.md"
+                    PROJECT_ROOT / "release-notes" / "v1.2.2.md"
                 ).read_text(encoding="utf-8").strip(),
             )
             checksums = (release / "SHA256SUMS").read_text(encoding="utf-8")
@@ -309,19 +309,19 @@ class ConfigurationTests(unittest.TestCase):
             tauri = source / "src-tauri"
             tauri.mkdir()
             (source / "package.json").write_text(
-                json.dumps({"version": "1.0.1"}), encoding="utf-8"
+                json.dumps({"version": "1.0.2"}), encoding="utf-8"
             )
             (source / "package-lock.json").write_text("{}\n", encoding="utf-8")
             (tauri / "Cargo.lock").write_text("", encoding="utf-8")
             (tauri / "Cargo.toml").write_text(
-                '[package]\nname = "mpv-enjoy-home"\nversion = "1.0.1"\n\n[dependencies]\n',
+                '[package]\nname = "mpv-enjoy-home"\nversion = "1.0.2"\n\n[dependencies]\n',
                 encoding="utf-8",
             )
             (tauri / "tauri.conf.json").write_text(
                 json.dumps(
                     {
                         "productName": "mpv-enjoy Home",
-                        "version": "1.0.1",
+                        "version": "1.0.2",
                         "identifier": "io.github.hosamajjf.mpv-enjoy-home",
                         "app": {"windows": [{"label": "main", "title": "Home"}]},
                     }
@@ -329,12 +329,12 @@ class ConfigurationTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            validate_source(source, "1.0.1")
-            integrated_path = write_integrated_config(source, "1.2.1")
+            validate_source(source, "1.0.2")
+            integrated_path = write_integrated_config(source, "1.2.2")
             self.assertNotIn(b"\r\n", integrated_path.read_bytes())
             integrated = json.loads(integrated_path.read_text(encoding="utf-8"))
             self.assertEqual(integrated["productName"], "mpv-enjoy")
-            self.assertEqual(integrated["version"], "1.2.1")
+            self.assertEqual(integrated["version"], "1.2.2")
             self.assertEqual(
                 integrated["identifier"], "io.github.hosamajjf.mpv-enjoy"
             )
@@ -613,8 +613,8 @@ class ConfigurationTests(unittest.TestCase):
         for path in paths:
             with self.subTest(path=path):
                 text = path.read_text(encoding="utf-8")
-                self.assertIn("mpv-enjoy-1.2.1", text)
-                self.assertNotIn("mpv-enjoy-1.2.0", text)
+                self.assertIn("mpv-enjoy-1.2.2", text)
+                self.assertNotIn("mpv-enjoy-1.2.1", text)
 
     def test_release_notes_describe_home_process_integration(self):
         notes = (
@@ -624,11 +624,27 @@ class ConfigurationTests(unittest.TestCase):
         self.assertIn("由首页负责管理媒体文件夹并拉起播放器", notes)
         self.assertIn("未来首页完善后嵌入libmpv", notes)
 
+    def test_release_notes_match_home_1_0_2_release(self):
+        notes = (
+            PROJECT_ROOT / "release-notes" / "v1.2.2.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "https://github.com/HosamaJJF/mpv-enjoy-home/releases/tag/v1.0.2",
+            notes,
+        )
+        for item in (
+            "设置界面增加弹幕设置菜单",
+            "禁用 WebView 默认右键行为",
+            "增加可选的按更新时间排序",
+            "媒体服务器在剧集封面左上角标记未看集数",
+        ):
+            self.assertIn(item, notes)
+
     def test_readme_lists_videotogether_with_integrated_components(self):
         readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
         introduction = readme.split("## 修改配置", 1)[0]
         self.assertIn("uosc_videotogether", introduction)
-        self.assertNotIn("## 1.2.1 更新", readme)
+        self.assertNotIn("## 1.2.2 更新", readme)
 
     def test_macos_launcher_uses_app_support_and_does_not_disable_gatekeeper(self):
         launcher = (PROJECT_ROOT / "scripts" / "macos-launcher.sh").read_text(
@@ -653,12 +669,12 @@ class ConfigurationTests(unittest.TestCase):
             with plist_path.open("wb") as handle:
                 plistlib.dump({"CFBundleExecutable": "mpv-enjoy-home"}, handle)
 
-            update_info_plist(app, "1.2.1")
+            update_info_plist(app, "1.2.2")
 
             with plist_path.open("rb") as handle:
                 plist = plistlib.load(handle)
-            self.assertEqual(plist["CFBundleShortVersionString"], "1.2.1")
-            self.assertEqual(plist["CFBundleVersion"], "1.2.1")
+            self.assertEqual(plist["CFBundleShortVersionString"], "1.2.2")
+            self.assertEqual(plist["CFBundleVersion"], "1.2.2")
             self.assertEqual(plist["CFBundleExecutable"], "mpv-enjoy-home")
 
     def test_macos_bundle_copies_vulkan_driver_discovery_resources(self):
@@ -734,9 +750,9 @@ class ConfigurationTests(unittest.TestCase):
         workflow = (
             PROJECT_ROOT / ".github" / "workflows" / "build.yml"
         ).read_text(encoding="utf-8")
-        self.assertIn("mpv-enjoy-1.2.1-$MPV_ENJOY_PLATFORM.dmg", script)
-        self.assertNotIn("mpv-enjoy-1.2.1-$MPV_ENJOY_PLATFORM.zip", script)
-        self.assertNotIn("mpv-enjoy-1.2.1-${{ matrix.platform }}.zip", workflow)
+        self.assertIn("mpv-enjoy-1.2.2-$MPV_ENJOY_PLATFORM.dmg", script)
+        self.assertNotIn("mpv-enjoy-1.2.2-$MPV_ENJOY_PLATFORM.zip", script)
+        self.assertNotIn("mpv-enjoy-1.2.2-${{ matrix.platform }}.zip", workflow)
         self.assertIn('gh run download "$GITHUB_RUN_ID"', workflow)
         self.assertIn('gh release upload "$GITHUB_REF_NAME"', workflow)
 
