@@ -27,7 +27,12 @@ from assemble import (  # noqa: E402
     update_info_plist,
     write_metadata,
 )
-from build_home import validate_source, write_integrated_config  # noqa: E402
+from build_home import (  # noqa: E402
+    cargo_target_directory,
+    validate_source,
+    write_integrated_config,
+)
+from home_ci_metadata import metadata as home_ci_metadata  # noqa: E402
 from collect_windows_runtime import msys_virtual_path, parse_ldd_references  # noqa: E402
 from dandanplay_credentials import (  # noqa: E402
     APP_ID_ENV,
@@ -293,6 +298,8 @@ class ConfigurationTests(unittest.TestCase):
         self.assertIn("-Dlibmpv=false", macos)
         self.assertIn("actions/setup-node@v6", workflow)
         self.assertIn("toolchain: 1.92.0", workflow)
+        self.assertIn("--mode package", workflow)
+        self.assertIn("--mode all", macos)
         self.assertIn("mpv-player", macos)
         self.assertIn(
             "for MPV_ENJOY_TOOL in python3 meson ninja go clang", windows
@@ -302,6 +309,59 @@ class ConfigurationTests(unittest.TestCase):
             "for MPV_ENJOY_HOME_TOOL in node npm rustc cargo"
         )
         self.assertLess(home_guard, home_tools)
+        self.assertIn('if [[ ! -d "$MPV_ENJOY_HOME_APP"', macos)
+
+    def test_home_build_uses_external_cargo_target_directory(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            target = root / "cargo-target"
+            previous = os.environ.get("CARGO_TARGET_DIR")
+            os.environ["CARGO_TARGET_DIR"] = str(target)
+            try:
+                self.assertEqual(cargo_target_directory(source), target.resolve())
+            finally:
+                if previous is None:
+                    os.environ.pop("CARGO_TARGET_DIR", None)
+                else:
+                    os.environ["CARGO_TARGET_DIR"] = previous
+
+    def test_home_ci_metadata_matches_locked_source(self):
+        values = home_ci_metadata()
+        home = load_lock()["components"]["mpv_enjoy_home"]
+        self.assertEqual(values["home_commit"], home["commit"])
+        self.assertEqual(values["home_source_sha256"], home["sha256"])
+        self.assertRegex(values["home_build_sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual(values["project_version"], "1.2.2")
+        self.assertEqual(values["home_changed"], "true")
+        self.assertEqual(home_ci_metadata("HEAD")["home_changed"], "false")
+
+    def test_ci_separates_home_quality_packaging_and_cache_writes(self):
+        build = (
+            PROJECT_ROOT / ".github" / "workflows" / "build.yml"
+        ).read_text(encoding="utf-8")
+        ci = (PROJECT_ROOT / ".github" / "workflows" / "ci.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("- '!main'", build)
+        self.assertIn("tags:\n      - 'v*'", build)
+        self.assertIn("branches:\n      - main", ci)
+        self.assertIn("cancel-in-progress", build)
+        self.assertIn("--mode checks", build)
+        self.assertEqual(build.count("--mode package"), 2)
+        self.assertEqual(build.count("python3 -m unittest discover"), 1)
+        self.assertIn("home-quality-${{ matrix.platform }}", build)
+        self.assertNotIn("home-quality-macos-x64", build)
+        self.assertIn(
+            "startsWith(github.ref, 'refs/tags/v') || "
+            "needs.changes.outputs.home_changed == 'true'",
+            build,
+        )
+        self.assertIn("actions/cache/restore@v6", build)
+        self.assertNotIn("actions/cache/save@v6", build)
+        self.assertIn("actions/cache/save@v6", ci)
+        self.assertIn("cargo clean", ci)
+        self.assertIn("needs.changes.outputs.home_changed == 'true'", ci)
 
     def test_home_integrated_config_uses_product_identity(self):
         with tempfile.TemporaryDirectory() as temporary:

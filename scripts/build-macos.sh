@@ -39,7 +39,7 @@ export MACOSX_DEPLOYMENT_TARGET=14.0
 export HOMEBREW_NO_AUTO_UPDATE=1
 cd "$MPV_ENJOY_PROJECT_DIR"
 
-for MPV_ENJOY_TOOL in brew python3 node npm rustc cargo meson ninja go clang codesign hdiutil
+for MPV_ENJOY_TOOL in brew python3 meson ninja go clang codesign hdiutil
 do
     if ! command -v "$MPV_ENJOY_TOOL" >/dev/null 2>&1; then
         echo "Missing required tool: $MPV_ENJOY_TOOL" >&2
@@ -57,11 +57,22 @@ python3 scripts/fetch_dependencies.py \
     --extract "mpv_enjoy_home=$MPV_ENJOY_HOME_SOURCE_DIR" \
     --force-extract
 
-python3 scripts/build_home.py \
-    --platform "$MPV_ENJOY_PLATFORM" \
-    --source "$MPV_ENJOY_HOME_SOURCE_DIR" \
-    --output "$MPV_ENJOY_HOME_APP" \
-    --metadata-output "$MPV_ENJOY_HOME_METADATA"
+if [[ ! -d "$MPV_ENJOY_HOME_APP" || \
+      ! -f "$MPV_ENJOY_HOME_METADATA/THIRD-PARTY-LICENSES.json" ]]; then
+    for MPV_ENJOY_HOME_TOOL in node npm rustc cargo
+    do
+        if ! command -v "$MPV_ENJOY_HOME_TOOL" >/dev/null 2>&1; then
+            echo "Missing required Home build tool: $MPV_ENJOY_HOME_TOOL" >&2
+            exit 1
+        fi
+    done
+    python3 scripts/build_home.py \
+        --mode all \
+        --platform "$MPV_ENJOY_PLATFORM" \
+        --source "$MPV_ENJOY_HOME_SOURCE_DIR" \
+        --output "$MPV_ENJOY_HOME_APP" \
+        --metadata-output "$MPV_ENJOY_HOME_METADATA"
+fi
 
 MPV_ENJOY_MESON_ARGS=(
     "$MPV_ENJOY_MPV_BUILD_DIR"

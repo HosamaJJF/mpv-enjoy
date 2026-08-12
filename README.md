@@ -70,7 +70,10 @@ MPV_ENJOY_DANDANPLAY_APP_SECRET_AES_B64
 仍为上游凭据时失败。本地构建时，应在当前 shell 中导出同名环境变量，并保持到组装和
 `verify_release.py` 验证完成。
 
-推荐在 GitHub Actions 中手动运行 `Build` 工作流。也可以在对应的原生环境中构建：
+推荐在发布准备分支上运行三平台 `Build` 验证；合并到 `main` 后只运行快速 `CI`，推送
+`v<版本>` 标签时再由 `Build` 从源码重新构建三个正式产物并发布 Release。分支上的连续
+推送会取消同一分支尚未完成的旧构建。也可以在对应的原生环境中手动构建，或在 GitHub
+Actions 中手动运行 `Build`：
 
 ```text
 # Windows 10/11 x64：在 MSYS2 CLANG64 shell 中执行
