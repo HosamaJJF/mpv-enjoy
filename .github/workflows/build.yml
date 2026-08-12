@@ -66,10 +66,8 @@ jobs:
         include:
           - platform: windows-x64
             runner: windows-2025
-            shell: pwsh
           - platform: macos-arm64
             runner: macos-15
-            shell: bash
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v6
@@ -81,14 +79,12 @@ jobs:
           toolchain: 1.92.0
           components: rustfmt, clippy
       - name: Extract Home source
-        shell: ${{ matrix.shell }}
         run: >-
           python scripts/fetch_dependencies.py
           --component mpv_enjoy_home
           --extract mpv_enjoy_home=build/sources/mpv-enjoy-home
           --force-extract
       - name: Home quality checks
-        shell: ${{ matrix.shell }}
         run: >-
           python scripts/build_home.py
           --mode checks

@@ -357,6 +357,7 @@ class ConfigurationTests(unittest.TestCase):
             "needs.changes.outputs.home_changed == 'true'",
             build,
         )
+        self.assertNotIn("shell: ${{ matrix.shell }}", build)
         self.assertIn("actions/cache/restore@v6", build)
         self.assertNotIn("actions/cache/save@v6", build)
         self.assertIn("actions/cache/save@v6", ci)
