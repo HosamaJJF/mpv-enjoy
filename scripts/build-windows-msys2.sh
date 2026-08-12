@@ -46,6 +46,7 @@ if [[ ! -f "$MPV_ENJOY_HOME_EXECUTABLE" || \
         fi
     done
     python3 scripts/build_home.py \
+        --mode all \
         --platform windows-x64 \
         --source "$MPV_ENJOY_HOME_SOURCE_DIR" \
         --output "$MPV_ENJOY_HOME_EXECUTABLE" \
