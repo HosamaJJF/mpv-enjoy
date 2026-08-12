@@ -38,15 +38,10 @@ jobs:
           fetch-depth: 0
       - name: Detect Home integration changes
         id: metadata
-        env:
-          BASE_SHA: ${{ github.event.before }}
         run: |
-          arguments=()
-          if [[ -n "$BASE_SHA" ]]; then
-            arguments+=(--base "$BASE_SHA")
-          fi
+          base_sha=$(git merge-base HEAD origin/main)
           python3 scripts/home_ci_metadata.py \
-            "${arguments[@]}" \
+            --base "$base_sha" \
             --github-output "$GITHUB_OUTPUT"
 
   project-tests:

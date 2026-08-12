@@ -347,6 +347,7 @@ class ConfigurationTests(unittest.TestCase):
         self.assertIn("tags:\n      - 'v*'", build)
         self.assertIn("branches:\n      - main", ci)
         self.assertIn("cancel-in-progress", build)
+        self.assertIn("git merge-base HEAD origin/main", build)
         self.assertIn("--mode checks", build)
         self.assertEqual(build.count("--mode package"), 2)
         self.assertEqual(build.count("python3 -m unittest discover"), 1)
