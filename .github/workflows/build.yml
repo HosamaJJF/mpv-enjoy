@@ -5,10 +5,12 @@ on:
   push:
     branches:
       - '**'
+      - '!main'
     tags:
       - 'v*'
     paths:
       - '.github/workflows/build.yml'
+      - '.github/workflows/ci.yml'
       - 'config/**'
       - 'scripts/**'
       - 'tests/**'
@@ -18,13 +20,77 @@ on:
       - 'LICENSES/**'
       - 'README.md'
 
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+
 permissions:
   contents: read
 
 jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      home_changed: ${{ steps.metadata.outputs.home_changed }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Detect Home integration changes
+        id: metadata
+        run: |
+          base_sha=$(git merge-base HEAD origin/main)
+          python3 scripts/home_ci_metadata.py \
+            --base "$base_sha" \
+            --github-output "$GITHUB_OUTPUT"
+
+  project-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - name: Unit tests
+        run: python3 -m unittest discover -s tests -v
+
+  home-quality:
+    needs: changes
+    if: startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.home_changed == 'true'
+    name: home-quality-${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-x64
+            runner: windows-2025
+          - platform: macos-arm64
+            runner: macos-15
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.92.0
+          components: rustfmt, clippy
+      - name: Extract Home source
+        run: >-
+          python scripts/fetch_dependencies.py
+          --component mpv_enjoy_home
+          --extract mpv_enjoy_home=build/sources/mpv-enjoy-home
+          --force-extract
+      - name: Home quality checks
+        run: >-
+          python scripts/build_home.py
+          --mode checks
+          --platform ${{ matrix.platform }}
+          --source build/sources/mpv-enjoy-home
+
   windows-x64:
     runs-on: windows-2025
     environment: release-credentials
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/.cache/cargo-target/home/windows-x64
     defaults:
       run:
         shell: msys2 {0}
@@ -37,7 +103,6 @@ jobs:
         with:
           toolchain: 1.92.0
           targets: x86_64-pc-windows-msvc
-          components: rustfmt, clippy
       - uses: msys2/setup-msys2@v2
         with:
           msystem: CLANG64
@@ -64,6 +129,8 @@ jobs:
         with:
           path: .cache/downloads
           key: mpv-enjoy-downloads-windows-x64-${{ hashFiles('dependencies.lock.json') }}
+          restore-keys: |
+            mpv-enjoy-downloads-windows-x64-
       - name: Build Home application shell
         shell: pwsh
         run: |
@@ -72,12 +139,11 @@ jobs:
             --extract mpv_enjoy_home=build/sources/mpv-enjoy-home `
             --force-extract
           python scripts/build_home.py `
+            --mode package `
             --platform windows-x64 `
             --source build/sources/mpv-enjoy-home `
             --output build/home/windows-x64/mpv-enjoy.exe `
             --metadata-output build/home/windows-x64/metadata
-      - name: Unit tests
-        run: python3 -m unittest discover -s tests -v
       - name: Build and package
         env:
           MPV_ENJOY_DANDANPLAY_APP_ID_AES_B64: ${{ secrets.MPV_ENJOY_DANDANPLAY_APP_ID_AES_B64 }}
@@ -103,6 +169,8 @@ jobs:
           - platform: macos-x64
             runner: macos-15-intel
     runs-on: ${{ matrix.runner }}
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/.cache/cargo-target/home/${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -111,15 +179,33 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.92.0
-          components: rustfmt, clippy
       - uses: actions/setup-go@v7
         with:
           go-version: '1.25.x'
           cache: false
+      - name: Read Home cache metadata
+        id: home-metadata
+        run: >-
+          python3 scripts/home_ci_metadata.py
+          --github-output "$GITHUB_OUTPUT"
+      - name: Restore macOS Intel Home release dependencies
+        if: matrix.platform == 'macos-x64'
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            .cache/cargo-target/home/macos-x64/.rustc_info.json
+            .cache/cargo-target/home/macos-x64/x86_64-apple-darwin/release/.fingerprint
+            .cache/cargo-target/home/macos-x64/x86_64-apple-darwin/release/build
+            .cache/cargo-target/home/macos-x64/x86_64-apple-darwin/release/deps
+          key: home-release-v1-macos-x64-rust1.92.0-${{ steps.home-metadata.outputs.home_commit }}-${{ steps.home-metadata.outputs.home_source_sha256 }}-${{ steps.home-metadata.outputs.home_build_sha256 }}-${{ steps.home-metadata.outputs.project_version }}
+          restore-keys: |
+            home-release-v1-macos-x64-rust1.92.0-${{ steps.home-metadata.outputs.home_commit }}-${{ steps.home-metadata.outputs.home_source_sha256 }}-${{ steps.home-metadata.outputs.home_build_sha256 }}-
       - uses: actions/cache@v6
         with:
           path: .cache/downloads
           key: mpv-enjoy-downloads-${{ matrix.platform }}-${{ hashFiles('dependencies.lock.json') }}
+          restore-keys: |
+            mpv-enjoy-downloads-${{ matrix.platform }}-
       - name: Install native build dependencies
         env:
           HOMEBREW_NO_AUTO_UPDATE: '1'
@@ -128,8 +214,18 @@ jobs:
           autoconf automake pkgconf libtool python freetype fribidi little-cms2 libarchive
           luajit libass ffmpeg meson uchardet mujs libplacebo
           molten-vk vulkan-loader vulkan-headers
-      - name: Unit tests
-        run: python3 -m unittest discover -s tests -v
+      - name: Build Home application shell
+        run: |
+          python3 scripts/fetch_dependencies.py \
+            --component mpv_enjoy_home \
+            --extract mpv_enjoy_home=build/sources/mpv-enjoy-home \
+            --force-extract
+          python3 scripts/build_home.py \
+            --mode package \
+            --platform "${{ matrix.platform }}" \
+            --source build/sources/mpv-enjoy-home \
+            --output "build/home/${{ matrix.platform }}/mpv-enjoy.app" \
+            --metadata-output "build/home/${{ matrix.platform }}/metadata"
       - name: Build, ad-hoc sign and package
         env:
           MPV_ENJOY_DANDANPLAY_APP_ID_AES_B64: ${{ secrets.MPV_ENJOY_DANDANPLAY_APP_ID_AES_B64 }}
@@ -146,6 +242,8 @@ jobs:
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs:
+      - project-tests
+      - home-quality
       - windows-x64
       - macos
     runs-on: ubuntu-24.04

@@ -112,9 +112,19 @@ def run(command: List[str], source: Path) -> None:
     subprocess.run(command, cwd=str(source), check=True)
 
 
+def cargo_target_directory(source: Path) -> Path:
+    configured = os.environ.get("CARGO_TARGET_DIR")
+    if configured:
+        target = Path(configured)
+        if not target.is_absolute():
+            target = source / target
+        return target.resolve()
+    return source / "src-tauri" / "target"
+
+
 def built_artifact(source: Path, platform: str) -> Path:
     target = SUPPORTED_PLATFORMS[platform]["target"]
-    release = source / "src-tauri" / "target" / target / "release"
+    release = cargo_target_directory(source) / target / "release"
     if platform == "windows-x64":
         return release / "mpv-enjoy-home.exe"
     return release / "bundle" / "macos" / "mpv-enjoy.app"
@@ -152,25 +162,110 @@ def copy_artifact(artifact: Path, output: Path, platform: str) -> None:
         shutil.copytree(str(artifact), str(output), symlinks=True)
 
 
+def install_node_dependencies(source: Path, npm: str) -> None:
+    run([npm, "ci"], source)
+
+
+def run_quality_checks(source: Path, npm: str, cargo: str) -> None:
+    run([npm, "run", "check"], source)
+    run([npm, "run", "format:check"], source)
+    run(
+        [cargo, "fmt", "--manifest-path", "src-tauri/Cargo.toml", "--check"],
+        source,
+    )
+    run(
+        [
+            cargo,
+            "clippy",
+            "--manifest-path",
+            "src-tauri/Cargo.toml",
+            "--all-targets",
+            "--",
+            "-D",
+            "warnings",
+        ],
+        source,
+    )
+    run(
+        [cargo, "test", "--manifest-path", "src-tauri/Cargo.toml", "--locked"],
+        source,
+    )
+
+
+def generate_release_metadata(source: Path, metadata_output: Path, npm: str) -> None:
+    run(
+        [
+            npm,
+            "run",
+            "release:metadata",
+            "--",
+            str(metadata_output),
+        ],
+        source,
+    )
+    inventory = metadata_output / "THIRD-PARTY-LICENSES.json"
+    if not inventory.is_file():
+        raise HomeBuildError("Home dependency inventory was not generated")
+
+
+def build_package(
+    source: Path,
+    output: Path,
+    metadata_output: Path,
+    platform: str,
+    config: Path,
+    npm: str,
+) -> None:
+    generate_release_metadata(source, metadata_output, npm)
+    target = SUPPORTED_PLATFORMS[platform]["target"]
+    command = [
+        npm,
+        "run",
+        "tauri",
+        "--",
+        "build",
+        "--target",
+        target,
+        "--config",
+        str(config),
+        "--ci",
+    ]
+    if platform == "windows-x64":
+        command.append("--no-bundle")
+    else:
+        command.extend(["--bundles", "app", "--no-sign"])
+    run(command, source)
+
+    artifact = built_artifact(source, platform)
+    validate_artifact(artifact, platform)
+    copy_artifact(artifact, output, platform)
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--mode",
+        choices=("all", "checks", "package"),
+        default="all",
+        help="Run all tasks, quality checks only, or release packaging only",
+    )
     parser.add_argument("--platform", required=True, choices=SUPPORTED_PLATFORMS)
     parser.add_argument("--source", required=True, type=Path)
-    parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--metadata-output", required=True, type=Path)
-    parser.add_argument(
-        "--skip-checks",
-        action="store_true",
-        help="Skip Home lint and test commands; intended only for repeated local spike builds",
-    )
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--metadata-output", type=Path)
     args = parser.parse_args(argv)
 
     try:
         args.source = args.source.resolve()
-        args.output = args.output.resolve()
-        args.metadata_output = args.metadata_output.resolve()
-        _assert_output_target(args.output)
-        _assert_output_target(args.metadata_output)
+        if args.mode in {"all", "package"}:
+            if args.output is None or args.metadata_output is None:
+                raise HomeBuildError(
+                    "--output and --metadata-output are required for packaging"
+                )
+            args.output = args.output.resolve()
+            args.metadata_output = args.metadata_output.resolve()
+            _assert_output_target(args.output)
+            _assert_output_target(args.metadata_output)
         _assert_source_target(args.source)
         if not args.source.is_dir():
             raise HomeBuildError("Home source directory does not exist: {}".format(args.source))
@@ -189,73 +284,23 @@ def main(argv: Optional[List[str]] = None) -> int:
                     args.platform, expected_host, actual_host
                 )
             )
-        config = write_integrated_config(
-            args.source, str(load_lock()["project_version"])
-        )
-
         npm = "npm.cmd" if os.name == "nt" else "npm"
         cargo = "cargo.exe" if os.name == "nt" else "cargo"
-        run([npm, "ci"], args.source)
-        run(
-            [
+        install_node_dependencies(args.source, npm)
+        if args.mode in {"all", "checks"}:
+            run_quality_checks(args.source, npm, cargo)
+        if args.mode in {"all", "package"}:
+            config = write_integrated_config(
+                args.source, str(load_lock()["project_version"])
+            )
+            build_package(
+                args.source,
+                args.output,
+                args.metadata_output,
+                args.platform,
+                config,
                 npm,
-                "run",
-                "release:metadata",
-                "--",
-                str(args.metadata_output),
-            ],
-            args.source,
-        )
-        inventory = args.metadata_output / "THIRD-PARTY-LICENSES.json"
-        if not inventory.is_file():
-            raise HomeBuildError("Home dependency inventory was not generated")
-        if not args.skip_checks:
-            run([npm, "run", "check"], args.source)
-            run([npm, "run", "format:check"], args.source)
-            run(
-                [cargo, "fmt", "--manifest-path", "src-tauri/Cargo.toml", "--check"],
-                args.source,
             )
-            run(
-                [
-                    cargo,
-                    "clippy",
-                    "--manifest-path",
-                    "src-tauri/Cargo.toml",
-                    "--all-targets",
-                    "--",
-                    "-D",
-                    "warnings",
-                ],
-                args.source,
-            )
-            run(
-                [cargo, "test", "--manifest-path", "src-tauri/Cargo.toml", "--locked"],
-                args.source,
-            )
-
-        target = SUPPORTED_PLATFORMS[args.platform]["target"]
-        command = [
-            npm,
-            "run",
-            "tauri",
-            "--",
-            "build",
-            "--target",
-            target,
-            "--config",
-            str(config),
-            "--ci",
-        ]
-        if args.platform == "windows-x64":
-            command.append("--no-bundle")
-        else:
-            command.extend(["--bundles", "app", "--no-sign"])
-        run(command, args.source)
-
-        artifact = built_artifact(args.source, args.platform)
-        validate_artifact(artifact, args.platform)
-        copy_artifact(artifact, args.output, args.platform)
     except (
         HomeBuildError,
         KeyError,
@@ -265,7 +310,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     ) as error:
         print("error: {}".format(error), file=sys.stderr)
         return 1
-    print(args.output)
+    if args.mode == "checks":
+        print("Home quality checks passed for {}".format(args.platform))
+    else:
+        print(args.output)
     return 0
 
 
