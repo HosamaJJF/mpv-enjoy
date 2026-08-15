@@ -14,7 +14,7 @@ MPV_ENJOY_HOME_EXECUTABLE="$MPV_ENJOY_BUILD_DIR/home/windows-x64/mpv-enjoy.exe"
 MPV_ENJOY_HOME_METADATA="$MPV_ENJOY_BUILD_DIR/home/windows-x64/metadata"
 MPV_ENJOY_MPV_BUILD_DIR="$MPV_ENJOY_BUILD_DIR/mpv-windows"
 MPV_ENJOY_RUNTIME_DIR="$MPV_ENJOY_BUILD_DIR/mpv-runtime/windows-x64"
-MPV_ENJOY_RELEASE_DIR="$MPV_ENJOY_BUILD_DIR/release/mpv-enjoy-1.2.2-windows-x64"
+MPV_ENJOY_RELEASE_DIR="$MPV_ENJOY_BUILD_DIR/release/mpv-enjoy-1.2.3-windows-x64"
 MPV_ENJOY_DIST_DIR="$MPV_ENJOY_PROJECT_DIR/dist"
 MPV_ENJOY_MANIFEST="$MPV_ENJOY_BUILD_DIR/windows-build-dependencies.txt"
 
@@ -113,7 +113,7 @@ python3 scripts/write_checksums.py "$MPV_ENJOY_RELEASE_DIR"
 /bin/mkdir -p "$MPV_ENJOY_DIST_DIR"
 python3 scripts/make_zip.py \
     --source "$MPV_ENJOY_RELEASE_DIR" \
-    --output "$MPV_ENJOY_DIST_DIR/mpv-enjoy-1.2.2-windows-x64.zip"
+    --output "$MPV_ENJOY_DIST_DIR/mpv-enjoy-1.2.3-windows-x64.zip"
 python3 scripts/write_checksums.py "$MPV_ENJOY_DIST_DIR"
 
-echo "Windows package: $MPV_ENJOY_DIST_DIR/mpv-enjoy-1.2.2-windows-x64.zip"
+echo "Windows package: $MPV_ENJOY_DIST_DIR/mpv-enjoy-1.2.3-windows-x64.zip"

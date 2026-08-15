@@ -29,6 +29,7 @@ from assemble import (  # noqa: E402
 )
 from build_home import (  # noqa: E402
     cargo_target_directory,
+    integrated_update_environment,
     validate_source,
     write_integrated_config,
 )
@@ -106,7 +107,7 @@ class DependencyLockTests(unittest.TestCase):
             self.assertNotIn("/main/", spec["url"])
 
     def test_target_architectures_are_exact(self):
-        self.assertEqual(self.lock["project_version"], "1.2.2")
+        self.assertEqual(self.lock["project_version"], "1.2.3")
         self.assertEqual(
             set(self.lock["platform_assets"]),
             {"windows-x64", "macos-arm64", "macos-x64"},
@@ -115,10 +116,10 @@ class DependencyLockTests(unittest.TestCase):
     def test_expected_component_versions(self):
         components = self.lock["components"]
         self.assertEqual(components["mpv"]["version"], "0.41.0")
-        self.assertEqual(components["mpv_enjoy_home"]["version"], "1.0.2")
+        self.assertEqual(components["mpv_enjoy_home"]["version"], "1.0.4")
         self.assertEqual(
             components["mpv_enjoy_home"]["commit"],
-            "9a20828e21e8feea54b969cf22fb551afb4aa6b0",
+            "d237c1e22e7a1440c0ed2c76eeb33a8a8c632b0d",
         )
         self.assertEqual(components["uosc"]["version"], "5.13.0")
         self.assertEqual(
@@ -205,7 +206,7 @@ class DependencyLockTests(unittest.TestCase):
             self.assertEqual(
                 notes.read_text(encoding="utf-8").strip(),
                 (
-                    PROJECT_ROOT / "release-notes" / "v1.2.2.md"
+                    PROJECT_ROOT / "release-notes" / "v1.2.3.md"
                 ).read_text(encoding="utf-8").strip(),
             )
             checksums = (release / "SHA256SUMS").read_text(encoding="utf-8")
@@ -250,6 +251,7 @@ class WindowsRuntimeTests(unittest.TestCase):
             self.assertEqual((release / "mpv-enjoy.exe").read_bytes(), b"home")
             self.assertEqual((release / "mpv.exe").read_bytes(), b"mpv")
             self.assertTrue((release / "mpv.com").is_file())
+            self.assertEqual((release / ".mpv-enjoy-portable").read_text(), "")
             self.assertTrue((release / "portable_config" / "mpv.conf").is_file())
 
     def test_parses_modern_msys2_ldd_paths(self):
@@ -332,9 +334,23 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(values["home_commit"], home["commit"])
         self.assertEqual(values["home_source_sha256"], home["sha256"])
         self.assertRegex(values["home_build_sha256"], r"^[0-9a-f]{64}$")
-        self.assertEqual(values["project_version"], "1.2.2")
+        self.assertEqual(values["project_version"], "1.2.3")
         self.assertEqual(values["home_changed"], "true")
-        self.assertEqual(home_ci_metadata("HEAD")["home_changed"], "false")
+        head_lock = json.loads(
+            subprocess.run(
+                ["git", "show", "HEAD:dependencies.lock.json"],
+                cwd=str(PROJECT_ROOT),
+                text=True,
+                capture_output=True,
+                check=True,
+            ).stdout
+        )
+        expected = (
+            "true"
+            if head_lock["components"]["mpv_enjoy_home"] != home
+            else "false"
+        )
+        self.assertEqual(home_ci_metadata("HEAD")["home_changed"], expected)
 
     def test_ci_separates_home_quality_packaging_and_cache_writes(self):
         build = (
@@ -370,37 +386,64 @@ class ConfigurationTests(unittest.TestCase):
             source = Path(temporary)
             tauri = source / "src-tauri"
             tauri.mkdir()
+            updater = tauri / "src" / "infrastructure"
+            updater.mkdir(parents=True)
+            frontend = source / "src"
+            frontend.mkdir()
             (source / "package.json").write_text(
-                json.dumps({"version": "1.0.2"}), encoding="utf-8"
+                json.dumps({"version": "1.0.4"}), encoding="utf-8"
             )
             (source / "package-lock.json").write_text("{}\n", encoding="utf-8")
             (tauri / "Cargo.lock").write_text("", encoding="utf-8")
             (tauri / "Cargo.toml").write_text(
-                '[package]\nname = "mpv-enjoy-home"\nversion = "1.0.2"\n\n[dependencies]\n',
+                '[package]\nname = "mpv-enjoy-home"\nversion = "1.0.4"\n\n[dependencies]\n',
                 encoding="utf-8",
             )
             (tauri / "tauri.conf.json").write_text(
                 json.dumps(
                     {
                         "productName": "mpv-enjoy Home",
-                        "version": "1.0.2",
+                        "version": "1.0.4",
                         "identifier": "io.github.hosamajjf.mpv-enjoy-home",
                         "app": {"windows": [{"label": "main", "title": "Home"}]},
                     }
                 ),
                 encoding="utf-8",
             )
+            (updater / "updater.rs").write_text(
+                "\n".join(
+                    'const VALUE: Option<&str> = option_env!("{}");'.format(variable)
+                    for variable in integrated_update_environment("1.0.4")
+                ),
+                encoding="utf-8",
+            )
+            (frontend / "App.svelte").write_text(
+                "void checkUpdate(true);\napi.downloadAndApplyUpdate()\n",
+                encoding="utf-8",
+            )
 
-            validate_source(source, "1.0.2")
-            integrated_path = write_integrated_config(source, "1.2.2")
+            validate_source(source, "1.0.4")
+            integrated_path = write_integrated_config(source, "1.2.3")
             self.assertNotIn(b"\r\n", integrated_path.read_bytes())
             integrated = json.loads(integrated_path.read_text(encoding="utf-8"))
             self.assertEqual(integrated["productName"], "mpv-enjoy")
-            self.assertEqual(integrated["version"], "1.2.2")
+            self.assertEqual(integrated["version"], "1.2.3")
             self.assertEqual(
                 integrated["identifier"], "io.github.hosamajjf.mpv-enjoy"
             )
             self.assertEqual(integrated["app"]["windows"][0]["title"], "mpv-enjoy")
+
+    def test_home_build_targets_mpv_enjoy_release_updates(self):
+        self.assertEqual(
+            integrated_update_environment("1.2.3"),
+            {
+                "MPV_ENJOY_HOME_UPDATE_REPOSITORY": "HosamaJJF/mpv-enjoy",
+                "MPV_ENJOY_HOME_UPDATE_ASSET_PREFIX": "mpv-enjoy",
+                "MPV_ENJOY_HOME_DISTRIBUTION_NAME": "mpv-enjoy 整合包",
+                "MPV_ENJOY_HOME_DISTRIBUTION_VERSION": "1.2.3",
+                "MPV_ENJOY_HOME_PORTABLE_MARKER": ".mpv-enjoy-portable",
+            },
+        )
 
     def _write_uosc_source(self, source, audio_menu_item=True):
         scripts = source / "src" / "uosc"
@@ -675,8 +718,8 @@ class ConfigurationTests(unittest.TestCase):
         for path in paths:
             with self.subTest(path=path):
                 text = path.read_text(encoding="utf-8")
-                self.assertIn("mpv-enjoy-1.2.2", text)
-                self.assertNotIn("mpv-enjoy-1.2.1", text)
+                self.assertIn("mpv-enjoy-1.2.3", text)
+                self.assertNotIn("mpv-enjoy-1.2.2", text)
 
     def test_release_notes_describe_home_process_integration(self):
         notes = (
@@ -702,11 +745,28 @@ class ConfigurationTests(unittest.TestCase):
         ):
             self.assertIn(item, notes)
 
+    def test_release_notes_match_1_2_3_update(self):
+        notes = (
+            PROJECT_ROOT / "release-notes" / "v1.2.3.md"
+        ).read_text(encoding="utf-8")
+        self.assertEqual(notes.strip(), "添加更新检测和下载功能")
+
+    def test_readme_documents_integrated_home_updates(self):
+        readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
+        for item in (
+            "首页启动时会静默检查 mpv-enjoy 的最新正式 Release",
+            "核对声明大小与 SHA-256",
+            "Windows 版会下载并定位便携 ZIP",
+            "备份 `portable_config` 中的自定义",
+            "macOS 版会下载并打开对应架构的",
+        ):
+            self.assertIn(item, readme)
+
     def test_readme_lists_videotogether_with_integrated_components(self):
         readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
         introduction = readme.split("## 修改配置", 1)[0]
         self.assertIn("uosc_videotogether", introduction)
-        self.assertNotIn("## 1.2.2 更新", readme)
+        self.assertNotIn("## 1.2.3 更新", readme)
 
     def test_macos_launcher_uses_app_support_and_does_not_disable_gatekeeper(self):
         launcher = (PROJECT_ROOT / "scripts" / "macos-launcher.sh").read_text(
@@ -731,12 +791,12 @@ class ConfigurationTests(unittest.TestCase):
             with plist_path.open("wb") as handle:
                 plistlib.dump({"CFBundleExecutable": "mpv-enjoy-home"}, handle)
 
-            update_info_plist(app, "1.2.2")
+            update_info_plist(app, "1.2.3")
 
             with plist_path.open("rb") as handle:
                 plist = plistlib.load(handle)
-            self.assertEqual(plist["CFBundleShortVersionString"], "1.2.2")
-            self.assertEqual(plist["CFBundleVersion"], "1.2.2")
+            self.assertEqual(plist["CFBundleShortVersionString"], "1.2.3")
+            self.assertEqual(plist["CFBundleVersion"], "1.2.3")
             self.assertEqual(plist["CFBundleExecutable"], "mpv-enjoy-home")
 
     def test_macos_bundle_copies_vulkan_driver_discovery_resources(self):
@@ -812,9 +872,9 @@ class ConfigurationTests(unittest.TestCase):
         workflow = (
             PROJECT_ROOT / ".github" / "workflows" / "build.yml"
         ).read_text(encoding="utf-8")
-        self.assertIn("mpv-enjoy-1.2.2-$MPV_ENJOY_PLATFORM.dmg", script)
-        self.assertNotIn("mpv-enjoy-1.2.2-$MPV_ENJOY_PLATFORM.zip", script)
-        self.assertNotIn("mpv-enjoy-1.2.2-${{ matrix.platform }}.zip", workflow)
+        self.assertIn("mpv-enjoy-1.2.3-$MPV_ENJOY_PLATFORM.dmg", script)
+        self.assertNotIn("mpv-enjoy-1.2.3-$MPV_ENJOY_PLATFORM.zip", script)
+        self.assertNotIn("mpv-enjoy-1.2.3-${{ matrix.platform }}.zip", workflow)
         self.assertIn('gh run download "$GITHUB_RUN_ID"', workflow)
         self.assertIn('gh release upload "$GITHUB_REF_NAME"', workflow)
 

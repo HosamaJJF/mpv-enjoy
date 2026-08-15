@@ -44,6 +44,16 @@ macOS 升级安装会保留已有的 `uosc.conf`。老用户如未看到新的�
 `controls` 中把 `button:danmaku` 改为 `button:danmaku,button:danmaku_menu`，或备份
 自定义内容后删除 `script-opts/uosc.conf` 并重启应用，以重新生成默认配置。
 
+## 软件更新
+
+首页启动时会静默检查 mpv-enjoy 的最新正式 Release，也可在设置页手动检查并查看更新说明。
+下载前会严格匹配当前平台的附件名称和 GitHub Release 地址，并核对声明大小与 SHA-256；
+不匹配或缺少摘要的附件不会被打开或执行。
+
+Windows 版会下载并定位便携 ZIP。请先退出首页和播放器，备份 `portable_config` 中的自定义
+内容，再手动解压覆盖原目录；不要在程序运行时覆盖文件。macOS 版会下载并打开对应架构的
+DMG，请将新版本拖入“应用程序”完成安装，应用支持目录中的已有用户配置会继续保留。
+
 ## 构建
 
 正式构建必须提供 mpv-enjoy 专用的弹弹play AppId 和 AppSecret 密文。密文格式与锁定的
@@ -99,13 +109,13 @@ python3 -m unittest discover -s tests -v
 
 python3 scripts/verify_release.py \
   --platform windows-x64 \
-  --release build/release/mpv-enjoy-1.2.2-windows-x64
+  --release build/release/mpv-enjoy-1.2.3-windows-x64
 
 python3 scripts/verify_release.py \
   --platform macos-arm64 \
-  --release build/release/mpv-enjoy-1.2.2-macos-arm64
+  --release build/release/mpv-enjoy-1.2.3-macos-arm64
 
 python3 scripts/verify_release.py \
   --platform macos-x64 \
-  --release build/release/mpv-enjoy-1.2.2-macos-x64
+  --release build/release/mpv-enjoy-1.2.3-macos-x64
 ```

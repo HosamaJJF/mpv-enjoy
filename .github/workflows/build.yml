@@ -153,7 +153,7 @@ jobs:
         with:
           name: mpv-enjoy-windows-x64
           path: |
-            dist/mpv-enjoy-1.2.2-windows-x64.zip
+            dist/mpv-enjoy-1.2.3-windows-x64.zip
             dist/SHA256SUMS
           if-no-files-found: error
 
@@ -235,7 +235,7 @@ jobs:
         with:
           name: mpv-enjoy-${{ matrix.platform }}
           path: |
-            dist/mpv-enjoy-1.2.2-${{ matrix.platform }}.dmg
+            dist/mpv-enjoy-1.2.3-${{ matrix.platform }}.dmg
             dist/SHA256SUMS
           if-no-files-found: error
 
@@ -281,9 +281,9 @@ jobs:
             )
           done
           mkdir release-assets
-          cp artifacts/windows-x64/mpv-enjoy-1.2.2-windows-x64.zip release-assets/
-          cp artifacts/macos-arm64/mpv-enjoy-1.2.2-macos-arm64.dmg release-assets/
-          cp artifacts/macos-x64/mpv-enjoy-1.2.2-macos-x64.dmg release-assets/
+          cp artifacts/windows-x64/mpv-enjoy-1.2.3-windows-x64.zip release-assets/
+          cp artifacts/macos-arm64/mpv-enjoy-1.2.3-macos-arm64.dmg release-assets/
+          cp artifacts/macos-x64/mpv-enjoy-1.2.3-macos-x64.dmg release-assets/
           (
             cd release-assets
             sha256sum mpv-enjoy-* > SHA256SUMS

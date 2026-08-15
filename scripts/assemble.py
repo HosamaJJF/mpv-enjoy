@@ -47,6 +47,7 @@ REQUIRED_COMPONENTS = (
     "yt_dlp_source",
 )
 SUPPORTED_PLATFORMS = ("windows-x64", "macos-arm64", "macos-x64")
+WINDOWS_PORTABLE_MARKER = ".mpv-enjoy-portable"
 MACOS_ARCHES = {
     "macos-arm64": {"macho": "arm64", "go": "arm64"},
     "macos-x64": {"macho": "x86_64", "go": "amd64"},
@@ -479,6 +480,7 @@ def assemble_windows(
         shutil.copytree(str(mpv_path), str(release_root), dirs_exist_ok=True)
     else:
         raise AssemblyError("Windows mpv runtime does not contain mpv.exe")
+    write_text(release_root / WINDOWS_PORTABLE_MARKER, "")
     shutil.copytree(str(config_dir), str(release_root / "portable_config"))
     copy_file(yt_dlp, release_root / "yt-dlp.exe", executable=True)
 
