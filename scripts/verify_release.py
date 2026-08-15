@@ -457,6 +457,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         report: Dict[str, str] = {"platform": args.platform}
         if args.platform == "windows-x64":
             require((args.release / "mpv-enjoy.exe").is_file(), "Missing Home executable")
+            require(
+                (args.release / ".mpv-enjoy-portable").is_file(),
+                "Missing Home portable update marker",
+            )
             require((args.release / "mpv.exe").is_file(), "Missing mpv.exe")
             require((args.release / "yt-dlp.exe").is_file(), "Missing yt-dlp.exe")
             mpv_binary = args.release / "mpv.exe"

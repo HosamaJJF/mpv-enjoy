@@ -59,7 +59,17 @@ def validate_source(source: Path, expected_version: str) -> None:
     cargo_path = source / "src-tauri" / "Cargo.toml"
     lock_path = source / "src-tauri" / "Cargo.lock"
     npm_lock_path = source / "package-lock.json"
-    required = (package_path, tauri_path, cargo_path, lock_path, npm_lock_path)
+    updater_path = source / "src-tauri" / "src" / "infrastructure" / "updater.rs"
+    app_path = source / "src" / "App.svelte"
+    required = (
+        package_path,
+        tauri_path,
+        cargo_path,
+        lock_path,
+        npm_lock_path,
+        updater_path,
+        app_path,
+    )
     missing = [str(path) for path in required if not path.is_file()]
     if missing:
         raise HomeBuildError("Home source is incomplete: {}".format(", ".join(missing)))
@@ -91,6 +101,18 @@ def validate_source(source: Path, expected_version: str) -> None:
     if tauri.get("identifier") != "io.github.hosamajjf.mpv-enjoy-home":
         raise HomeBuildError("Unexpected standalone Home application identifier")
 
+    updater = updater_path.read_text(encoding="utf-8")
+    for variable in integrated_update_environment(expected_version):
+        anchor = 'option_env!("{}")'.format(variable)
+        if updater.count(anchor) != 1:
+            raise HomeBuildError(
+                "Home updater build metadata no longer matches: {}".format(variable)
+            )
+    app = app_path.read_text(encoding="utf-8")
+    for anchor in ("void checkUpdate(true);", "api.downloadAndApplyUpdate()"):
+        if app.count(anchor) != 1:
+            raise HomeBuildError("Home update UI no longer matches: {}".format(anchor))
+
 
 def write_integrated_config(source: Path, project_version: str) -> Path:
     original = source / "src-tauri" / "tauri.conf.json"
@@ -108,8 +130,31 @@ def write_integrated_config(source: Path, project_version: str) -> Path:
     return destination
 
 
-def run(command: List[str], source: Path) -> None:
-    subprocess.run(command, cwd=str(source), check=True)
+def run(
+    command: List[str],
+    source: Path,
+    environment: Optional[Dict[str, str]] = None,
+) -> None:
+    process_environment = None
+    if environment is not None:
+        process_environment = os.environ.copy()
+        process_environment.update(environment)
+    subprocess.run(
+        command,
+        cwd=str(source),
+        check=True,
+        env=process_environment,
+    )
+
+
+def integrated_update_environment(project_version: str) -> Dict[str, str]:
+    return {
+        "MPV_ENJOY_HOME_UPDATE_REPOSITORY": "HosamaJJF/mpv-enjoy",
+        "MPV_ENJOY_HOME_UPDATE_ASSET_PREFIX": "mpv-enjoy",
+        "MPV_ENJOY_HOME_DISTRIBUTION_NAME": "mpv-enjoy 整合包",
+        "MPV_ENJOY_HOME_DISTRIBUTION_VERSION": project_version,
+        "MPV_ENJOY_HOME_PORTABLE_MARKER": ".mpv-enjoy-portable",
+    }
 
 
 def cargo_target_directory(source: Path) -> Path:
@@ -214,6 +259,7 @@ def build_package(
     metadata_output: Path,
     platform: str,
     config: Path,
+    project_version: str,
     npm: str,
 ) -> None:
     generate_release_metadata(source, metadata_output, npm)
@@ -234,7 +280,11 @@ def build_package(
         command.append("--no-bundle")
     else:
         command.extend(["--bundles", "app", "--no-sign"])
-    run(command, source)
+    run(
+        command,
+        source,
+        integrated_update_environment(project_version),
+    )
 
     artifact = built_artifact(source, platform)
     validate_artifact(artifact, platform)
@@ -269,7 +319,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         _assert_source_target(args.source)
         if not args.source.is_dir():
             raise HomeBuildError("Home source directory does not exist: {}".format(args.source))
-        spec = dict(load_lock()["components"]["mpv_enjoy_home"])
+        lock = load_lock()
+        spec = dict(lock["components"]["mpv_enjoy_home"])
         validate_source(args.source, str(spec["version"]))
 
         expected_host = SUPPORTED_PLATFORMS[args.platform]["host"].lower()
@@ -290,15 +341,15 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.mode in {"all", "checks"}:
             run_quality_checks(args.source, npm, cargo)
         if args.mode in {"all", "package"}:
-            config = write_integrated_config(
-                args.source, str(load_lock()["project_version"])
-            )
+            project_version = str(lock["project_version"])
+            config = write_integrated_config(args.source, project_version)
             build_package(
                 args.source,
                 args.output,
                 args.metadata_output,
                 args.platform,
                 config,
+                project_version,
                 npm,
             )
     except (
