@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-15T11:17:48Z",
-  "project_version": "1.2.3",
+  "generated_at": "2026-11-26T05:20:35Z",
+  "project_version": "1.2.4",
   "components": {
     "mpv": {
       "version": "0.41.0",
@@ -14,13 +14,13 @@
       "license": "GPL-2.0-or-later AND LGPL-2.1-or-later"
     },
     "mpv_enjoy_home": {
-      "version": "1.0.4",
-      "ref": "v1.0.4",
-      "commit": "d237c1e22e7a1440c0ed2c76eeb33a8a8c632b0d",
+      "version": "1.0.5",
+      "ref": "v1.0.5",
+      "commit": "e79718ecd51ec67c7b7607332a3044e2a0fc5b94",
       "repository": "https://github.com/HosamaJJF/mpv-enjoy-home",
-      "url": "https://codeload.github.com/HosamaJJF/mpv-enjoy-home/tar.gz/d237c1e22e7a1440c0ed2c76eeb33a8a8c632b0d",
-      "filename": "mpv-enjoy-home-1.0.4-d237c1e.tar.gz",
-      "sha256": "c08b9197e04275fe603b69225ed0929b470e4eac653df9554da4ae57aac20d7a",
+      "url": "https://codeload.github.com/HosamaJJF/mpv-enjoy-home/tar.gz/e79718ecd51ec67c7b7607332a3044e2a0fc5b94",
+      "filename": "mpv-enjoy-home-1.0.5-e79718.tar.gz",
+      "sha256": "8b77660e2548fe56af111725f5a982fa4a4ac0df44afeb7f6730e4c32c1c6f8a",
       "license": "MIT"
     },
     "uosc": {
